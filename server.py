@@ -1,38 +1,30 @@
-# Rock-Paper-Scissors
-# Networked server, human opponent, 3 rounds
-
-from socketHelper import create_new_socket
-import client as rlib
-
-HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
-PORT = 65432        # Port to listen on (non-privileged ports are > 1023)
+import socket
 
 def main():
-    with create_new_socket() as s:
-        s.bind(HOST, PORT)
+    HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
+    PORT = 65432        # Port to listen on
+    
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind((HOST, PORT))
         s.listen()
-        print("ROSHAMBO dumb server started. Listening on", (HOST, PORT))
-
-        conn2client, addr = s.accept()
-        with conn2client:
-            print('Connected by', addr)
+        print("Chat server started. Waiting for connection...")
+        
+        conn, addr = s.accept()
+        with conn:
+            print(f"Connected by {addr}")
             
             while True:
-                msg = conn2client.recv()
-                if not msg:
+                data = conn.recv(1024).decode()
+                if not data:
+                    print("Client disconnected.")
                     break
-
-                # Client narrates the game play, which it sends in the "body"
-                # of its message
-                print(msg[rlib.HEADER_SZ:])
-
-                if msg[0] == rlib.QUERY_CHOICE:
-                    # Match continues. Grab a shape from our player and
-                    # send it to the client.
-                    choice = rlib.player_choice()
-                    conn2client.sendall(choice)
-
-            print('Disconnected')
-
+                print(f"Client: {data}")
+                
+                response = input("You: ")
+                if response.lower() == 'exit':
+                    print("Closing connection...")
+                    break
+                conn.sendall(response.encode())
+        
 if __name__ == '__main__':
     main()
