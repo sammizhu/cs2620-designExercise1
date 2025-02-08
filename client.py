@@ -30,20 +30,23 @@ def connectsql():
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-
-        username = input("What is your username?: ")
-        password = input("What is your password?: ")
-
         connection = pymysql.connect(host=HOST, user='root', database='db262')
         cursor = connection.cursor()
-
         connection.commit()
+
+        startup = input()
+        if startup == '1':
+            username = input("What is your username?: ")
+            password = input("What is your password?: ")
+        elif startup == '2':
+            username = input("Welcome first-time user! Enter a username: ")
+            password = input("Enter a password: ")
 
         with connection:
             with connection.cursor() as cursor:
                 cursor.execute("CREATE TABLE IF NOT EXISTS users (username VARCHAR(255) NOT NULL PRIMARY KEY, password VARCHAR(255) NOT NULL);")
                 sql = "INSERT INTO users (username, password) VALUES (%s, %s);"
-                cursor.execute(sql, (username, password))
+                # cursor.execute(sql, (username, password))
 
                 connection.commit()
 
