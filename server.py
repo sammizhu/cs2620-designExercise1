@@ -37,6 +37,7 @@ def handle_client(conn, addr):
     try:
         # Sends this to the Client after they connect to Server so they know how to send a message to a specific Client
         conn.sendall(f"Connected as User {user_id}. Type '@UserID message' to send a DM.\n".encode()) 
+        conn.sendall("Welcome to EST! Enter 1 for Login and 2 for Register.\n")
 
         while True:
             data = conn.recv(1024).decode().strip()
