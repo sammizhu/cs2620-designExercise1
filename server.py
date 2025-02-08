@@ -1,11 +1,19 @@
 import socket
 import threading
+import pymysql
+import pymysql.cursors
 
 # NEED TO REMOVE THIS LATER!! 
 HOST = '127.0.0.1'  
 PORT = 65432       
 
 clients = {}  # Dictionary to store connected clients {user_id: socket} --> change this to a username mapping later 
+
+def connectsql():
+    connection = pymysql.connect(host=HOST, user='root', database='db262')
+    cursor = connection.cursor()
+
+    connection.commit()
 
 def send_message(message, target_id, sender_id):
     """Send a private message to a specific client."""
@@ -63,6 +71,7 @@ def start_server():
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((HOST, PORT))
         server_socket.listen()
+        connectsql()
         print(f"Server listening on {HOST}:{PORT}...")
 
         while True:
