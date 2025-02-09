@@ -133,7 +133,9 @@ def main():
                 while checkRealUsername(username, connection):
                     password = input('Password: ')
                     if checkRealPassword(username, password, connection):
-                        cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s", [port_num, username])
+                        print("portnum: ", port_num)
+                        cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s", [str(port_num), username])
+                        connection.commit()
                         print(f'Welcome back {username}!')
                         logged_in = True
                         break

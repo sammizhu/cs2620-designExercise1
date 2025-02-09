@@ -58,8 +58,10 @@ def handle_client(conn, addr):
                     cursor = connection.cursor()
                     cursor.execute("SELECT socket_id FROM users WHERE username = %s", target_username)
                     result = cursor.fetchone()
+                    print("result: ", result)
                     if result:
-                        target_id = int(result[0])  # Get stored socket_id
+                        target_id = int(result[0]) 
+                        print("target_id:", target_id)
                         send_message(message, target_id, user_id)
                     else:
                         conn.sendall("User not found.\n".encode())
