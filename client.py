@@ -60,24 +60,24 @@ def checkRealUsername(username, connection):
     return False
 
 def checkMessages(username, connection, s):
-    cursor = connection.cursor()
-    query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
-    cursor.execute(query, username)
-    connection.commit()
-    result = cursor.fetchone()[0]
-    if result > 0:
-        readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
+    # cursor = connection.cursor()
+    # query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
+    # cursor.execute(query, username)
+    # connection.commit()
+    # result = cursor.fetchone()[0]
+    # if result > 0:
+    #     readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
 
-    if readmessage == 1:
-        query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
-        cursor.execute(query2)
-        connection.commit()
-        result = cursor.fetchall()
-        for num, sender in result:
-            print(f'You have {num} unread messages from {sender}')
-        readsender = input('Who would you like to read messages from?: ')
-    elif readmessage == 2:
-        sendMessage(username, s)
+    # if readmessage == 1:
+    #     query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
+    #     cursor.execute(query2)
+    #     connection.commit()
+    #     result = cursor.fetchall()
+    #     for num, sender in result:
+    #         print(f'You have {num} unread messages from {sender}')
+    #     readsender = input('Who would you like to read messages from?: ')
+    # elif readmessage == 2:
+    sendMessage(username, s)
     
 def checkRealPassword(username, password, connection):
     passwordencode = password.encode('utf-8')
@@ -103,7 +103,7 @@ def main():
         connection = connectsql()
         cursor = connection.cursor()
 
-        user_id = s.getsockname()[1]  # Get client's port number as user ID
+        port_num = s.getsockname()[1]  # Get client's port number as user ID
 
         threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
 
@@ -133,6 +133,7 @@ def main():
                 while checkRealUsername(username, connection):
                     password = input('Password: ')
                     if checkRealPassword(username, password, connection):
+                        cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s", [port_num, username])
                         print(f'Welcome back {username}!')
                         logged_in = True
                         break
@@ -146,7 +147,7 @@ def main():
             # elif msg.lower() == 'exit':
             #     print('Closing connection...')
             #     break
-            s.sendall(msg.encode())
+            # s.sendall(msg.encode())
 
             if logged_in:
                 checkMessages(username, connection, s)

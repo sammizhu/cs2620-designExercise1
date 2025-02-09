@@ -47,16 +47,25 @@ def handle_client(conn, addr):
             if data.startswith("@"):
                 # Direct message format: "@12345 message"
                 parts = data.split(" ", 1)
+                print(parts)
                 if len(parts) < 2:
                     conn.sendall("Invalid message format. Use @UserID message\n".encode())
                     continue
 
-                target_id, message = parts
+                target_username, message = parts
+                target_username = target_username[1:]
+
                 try:
-                    target_id = int(target_id[1:])  # Convert "@12345" -> 12345 (integer)
-                    send_message(message, target_id, user_id)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT socket_id FROM users WHERE username = %s", target_username)
+                    result = cursor.fetchone()
+                    if result:
+                        target_id = int(result[0])  # Get stored socket_id
+                        send_message(message, target_id, user_id)
+                    else:
+                        conn.sendall("User not found.\n".encode())
                 except ValueError:
-                    conn.sendall("Invalid UserID format. Use @UserID message\n".encode())
+                    conn.sendall("Invalid UserID.\n".encode())
             else:
                 conn.sendall("Error: Messages must start with '@UserID'\n".encode())
 

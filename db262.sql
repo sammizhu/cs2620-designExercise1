@@ -52,6 +52,7 @@ DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `username` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
+  `socket_id` VARCHAR(255) NULL,
   PRIMARY KEY (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -62,7 +63,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES ('est','est1'),('est1','$2b$12$dOp6LSuaIvcOaUk49YHvFOaNObdTmQXdBN/VtgOSBos8Ej90h7Cdy');
+INSERT INTO `users` VALUES ('est','est1', ''),('est1','$2b$12$dOp6LSuaIvcOaUk49YHvFOaNObdTmQXdBN/VtgOSBos8Ej90h7Cdy', '');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
