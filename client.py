@@ -4,8 +4,8 @@ import pymysql
 import pymysql.cursors
 import bcrypt
 
-# NEED TO REMOVE THIS LATER!! 
-HOST = '127.0.0.1'  
+# NEED TO REMOVE THIS LATER!!
+HOST = '127.0.0.1'
 PORT = 65432
 logged_in = False
 
@@ -15,11 +15,12 @@ def receive_messages(sock):
         try:
             response = sock.recv(1024).decode()
             if not response:
-                print("Disconnected from server.")
+                print("\nDisconnected from server.")
                 break
-            print(f"\n{response}\nYou: ", end="") 
+            print(f"\n{response}")
+            print("You: ", end="", flush=True)
         except ConnectionResetError:
-            print("Server closed the connection.")
+            print("\nServer closed the connection.")
             break
     sock.close()
 
@@ -35,29 +36,37 @@ def checkValidPassword(password):
                 upper += 1
             if (char.isdigit()):
                 number += 1
-            if (char == '_' or char == '@' or char == '$' or char =='#' or char == '!'):
+            if (char in ['_', '@', '$', '#', '!']):
                 special += 1
         if (upper > 0 and number > 0 and special > 0):
             return True
     return False
 
 def hashPass(password):
-    bytes = password.encode('utf-8')
+    bytes_pass = password.encode('utf-8')
     salt = bcrypt.gensalt()
-    hash = bcrypt.hashpw(bytes, salt)
-    string_hash = hash.decode('utf8')
-    return string_hash
+    hashed = bcrypt.hashpw(bytes_pass, salt)
+    return hashed.decode('utf8')
 
 def checkRealUsername(username, connection):
     cursor = connection.cursor()
     usercheck = "SELECT COUNT(*) FROM users WHERE username=%s;"
-    cursor.execute(usercheck, username)
+    cursor.execute(usercheck, (username,))
     connection.commit()
     result = cursor.fetchone()[0]
+    return (result == 1)
 
-    if result == 1:
-        return True
-    return False
+def checkRealPassword(username, password, connection):
+    passwordencode = password.encode('utf-8')
+    cursor = connection.cursor()
+    passwordquery = "SELECT password FROM users WHERE username=%s;"
+    cursor.execute(passwordquery, (username,))
+    connection.commit()
+    row = cursor.fetchone()
+    if not row:
+        return False
+    stored_hash = row[0].encode('utf-8')
+    return bcrypt.checkpw(passwordencode, stored_hash)
 
 def checkMessages(username, connection, s):
     # cursor = connection.cursor()
@@ -78,63 +87,59 @@ def checkMessages(username, connection, s):
     #     readsender = input('Who would you like to read messages from?: ')
     # elif readmessage == 2:
     sendMessage(username, s)
-    
-def checkRealPassword(username, password, connection):
-    passwordencode = password.encode('utf-8')
-
-    cursor = connection.cursor()
-    passwordquery = "SELECT password FROM users WHERE username=%s;"
-    cursor.execute(passwordquery, username)
-    connection.commit()
-    hash = cursor.fetchone()[0]
-    hashencode = hash.encode('utf-8')
-
-    result = bcrypt.checkpw(passwordencode, hashencode)
-    return result
 
 def sendMessage(sender, s):
-    # sender as an input to add to messages table
-    msg = input("Type '@UserID message' to send a DM.\n")
-    s.sendall(msg.encode())
-
+    """
+    Instead of just sending one message and quitting,
+    let's allow the user to send multiple messages in a loop.
+    """
+    print("Type '@UserID message' to send a DM (or 'quit' to exit).")
+    while True:
+        print("You: ", end="", flush=True)
+        msg = input() 
+        if msg.lower() == 'quit':
+            break
+        s.sendall(msg.encode())
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
         connection = connectsql()
         cursor = connection.cursor()
 
-        port_num = s.getsockname()[1]  # Get client's port number as user ID
+        port_num = s.getsockname()[1]  # Get the ephemeral port for this client
 
+        # Start background thread to listen for incoming server messages
         threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
 
         while True:
             logged_in = False
             msg = input()
             if msg == '1':
-                username = input("Welcome first-time user! Enter a username. All characters must be alphanumeric: ")
-                    # check if username is valid --> if not give error
-                password = input("Enter a password (Minimum 7 characters, at least one upper case alphabet character, at least 1 number between [0-9], and at least one special character [_, @, $, #, !]): ")
-                # If password valid, then hash and verify successful registration; else, give error
+                # Registration
+                username = input("Welcome first-time user! Enter a username (alphanumeric): ")
+                password = input("Enter a password (>=7 chars, 1 uppercase, 1 digit, 1 special): ")
+                
                 while True:
                     if checkValidPassword(password):
-                        hash = hashPass(password)
-                        with connection:
-                            with connection.cursor() as cursor:
-                                accountregister = "INSERT INTO users (username, password) VALUES (%s, %s);"
-                                cursor.execute(accountregister, (username, hash))
-                                connection.commit()
+                        hashed_pass = hashPass(password)
+                        with connection.cursor() as cursor:
+                            accountregister = "INSERT INTO users (username, password) VALUES (%s, %s);"
+                            cursor.execute(accountregister, (username, hashed_pass))
+                            connection.commit()
                         print("Registration Successful!")
                         break
                     else:
                         password = input('Please enter a valid password: ')
                     
             elif msg == '2':
+                # Login
                 username = input('Username: ')
                 while checkRealUsername(username, connection):
                     password = input('Password: ')
                     if checkRealPassword(username, password, connection):
                         print("portnum: ", port_num)
-                        cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s", [str(port_num), username])
+                        cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s",
+                                       (str(port_num), username))
                         connection.commit()
                         print(f'Welcome back {username}!')
                         logged_in = True
@@ -146,12 +151,8 @@ def main():
                     print('Login Failed. Please try again.')
                     break
 
-            # elif msg.lower() == 'exit':
-            #     print('Closing connection...')
-            #     break
-            # s.sendall(msg.encode())
-
             if logged_in:
+                # Now let the user send multiple messages
                 checkMessages(username, connection, s)
             else:
                 print('Closing connection...')
@@ -159,3 +160,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
