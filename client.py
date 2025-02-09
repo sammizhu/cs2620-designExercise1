@@ -6,6 +6,7 @@ import pymysql.cursors
 # NEED TO REMOVE THIS LATER!! 
 HOST = '127.0.0.1'  
 PORT = 65432
+logged_in = False
 
 def receive_messages(sock):
     """Continuously listens for messages from the server."""
@@ -34,14 +35,6 @@ def main():
         cursor = connection.cursor()
         connection.commit()
 
-        startup = input()
-        if startup == '1':
-            username = input("What is your username?: ")
-            password = input("What is your password?: ")
-        elif startup == '2':
-            username = input("Welcome first-time user! Enter a username: ")
-            password = input("Enter a password: ")
-
         with connection:
             with connection.cursor() as cursor:
                 cursor.execute("CREATE TABLE IF NOT EXISTS users (username VARCHAR(255) NOT NULL PRIMARY KEY, password VARCHAR(255) NOT NULL);")
@@ -55,11 +48,26 @@ def main():
         threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
 
         while True:
-            msg = input("You: ")
-            if msg.lower() == 'exit':
-                print("Closing connection...")
-                break
-            s.sendall(msg.encode())
+            msg = input()
+            if msg == '1':
+                username = input("Username?: ")
+                # check to see if this username exists in db
+                password = input("Password?: ")
+                # check to see if this password matches
+                # if matches:
+                print(f'Welcome back {username}!')
+                # else: print error
+                logged_in = True
+            elif msg == '2':
+                username = input("Welcome first-time user! Enter a username: ")
+                    # check if username is valid --> if not give error
+                password = input("Enter a password: ")
+                    # check if password is valid
+                    # if so then hash and verify success, else give error
+                if msg.lower() == 'exit':
+                    print("Closing connection...")
+                    break
+                s.sendall(msg.encode())
 
 if __name__ == '__main__':
     main()
