@@ -59,25 +59,25 @@ def checkRealUsername(username, connection):
         return True
     return False
 
-def checkMessages(username, connection):
-    cursor = connection.cursor()
-    query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
-    cursor.execute(query, username)
-    connection.commit()
-    result = cursor.fetchone()[0]
-    if result > 0:
-        readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
+def checkMessages(username, connection, s):
+    # cursor = connection.cursor()
+    # query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
+    # cursor.execute(query, username)
+    # connection.commit()
+    # result = cursor.fetchone()[0]
+    # if result > 0:
+    #     readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
 
-    if readmessage == 1:
-        query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
-        cursor.execute(query2)
-        connection.commit()
-        result = cursor.fetchall()
-        for num, sender in result:
-            print(f'You have {num} unread messages from {sender}')
-        readsender = input('Who would you like to read messages from?: ')
-    elif readmessage == 2:
-        print('')
+    # if readmessage == 1:
+    #     query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
+    #     cursor.execute(query2)
+    #     connection.commit()
+    #     result = cursor.fetchall()
+    #     for num, sender in result:
+    #         print(f'You have {num} unread messages from {sender}')
+    #     readsender = input('Who would you like to read messages from?: ')
+    # elif readmessage == 2:
+    sendMessage(username, s)
     
 def checkRealPassword(username, password, connection):
     passwordencode = password.encode('utf-8')
@@ -92,13 +92,18 @@ def checkRealPassword(username, password, connection):
     result = bcrypt.checkpw(passwordencode, hashencode)
     return result
 
+def sendMessage(sender, s):
+    # sender as an input to add to messages table
+    msg = input("Type '@UserID message' to send a DM.\n")
+    s.sendall(msg.encode())
+
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
         connection = connectsql()
         cursor = connection.cursor()
 
-        user_id = s.getsockname()[1]  # Get client's port number as user ID
+        port_num = s.getsockname()[1]  # Get client's port number as user ID
 
         threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
 
@@ -123,15 +128,12 @@ def main():
                     else:
                         password = input('Please enter a valid password: ')
                     
-                if msg.lower() == 'exit':
-                    print('Closing connection...')
-                    break
-                s.sendall(msg.encode())
             elif msg == '2':
                 username = input('Username: ')
                 while checkRealUsername(username, connection):
                     password = input('Password: ')
                     if checkRealPassword(username, password, connection):
+                        cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s", [port_num, username])
                         print(f'Welcome back {username}!')
                         logged_in = True
                         break
@@ -142,8 +144,13 @@ def main():
                     print('Login Failed. Please try again.')
                     break
 
+            # elif msg.lower() == 'exit':
+            #     print('Closing connection...')
+            #     break
+            # s.sendall(msg.encode())
+
             if logged_in:
-                checkMessages()
+                checkMessages(username, connection, s)
             else:
                 print('Closing connection...')
                 break
