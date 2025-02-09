@@ -11,9 +11,7 @@ clients = {}  # Dictionary to store connected clients {user_id: socket} --> chan
 
 def connectsql():
     connection = pymysql.connect(host=HOST, user='root', database='db262')
-    cursor = connection.cursor()
-
-    connection.commit()
+    return connection
 
 def send_message(message, target_id, sender_id):
     """Send a private message to a specific client."""
@@ -56,7 +54,8 @@ def handle_client(conn, addr):
                 target_username = target_username[1:]
 
                 try:
-                    cursor = conn.cursor()
+                    connection = connectsql()
+                    cursor = connection.cursor()
                     cursor.execute("SELECT socket_id FROM users WHERE username = %s", target_username)
                     result = cursor.fetchone()
                     if result:
