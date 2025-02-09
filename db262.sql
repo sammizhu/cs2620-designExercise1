@@ -28,6 +28,16 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
+CREATE TABLE `messages` (
+  `messageid` INT NOT NULL AUTO_INCREMENT,
+  `receiver` VARCHAR(255) NOT NULL,
+  `sender` VARCHAR(255) NOT NULL,
+  `message` VARCHAR(255),
+  `datetime` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  `isread` BOOLEAN,
+  PRIMARY KEY (`messageid`)
+);
+
 --
 -- Dumping data for table `users`
 --

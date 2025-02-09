@@ -2,6 +2,7 @@ import socket
 import threading
 import pymysql
 import pymysql.cursors
+import bcrypt
 
 # NEED TO REMOVE THIS LATER!! 
 HOST = '127.0.0.1'  
@@ -24,50 +25,128 @@ def receive_messages(sock):
 
 def connectsql():
     connection = pymysql.connect(host=HOST, user='root', database='db262')
-    cursor = connection.cursor()
+    return connection
 
+def checkValidPassword(password):
+    upper, number, special = 0, 0, 0
+    if len(password) >= 7:
+        for char in password:
+            if (char.isupper()):
+                upper += 1
+            if (char.isdigit()):
+                number += 1
+            if (char == '_' or char == '@' or char == '$' or char =='#' or char == '!'):
+                special += 1
+        if (upper > 0 and number > 0 and special > 0):
+            return True
+    return False
+
+def hashPass(password):
+    bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hash = bcrypt.hashpw(bytes, salt)
+    string_hash = hash.decode('utf8')
+    return string_hash
+
+def checkRealUsername(username, connection):
+    cursor = connection.cursor()
+    usercheck = "SELECT COUNT(*) FROM users WHERE username=%s;"
+    cursor.execute(usercheck, username)
     connection.commit()
+    result = cursor.fetchone()[0]
+
+    if result == 1:
+        return True
+    return False
+
+def checkMessages(username, connection):
+    cursor = connection.cursor()
+    query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
+    cursor.execute(query, username)
+    connection.commit()
+    result = cursor.fetchone()[0]
+    if result > 0:
+        readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
+
+    if readmessage == 1:
+        query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
+        cursor.execute(query2)
+        connection.commit()
+        result = cursor.fetchall()
+        for num, sender in result:
+            print(f'You have {num} unread messages from {sender}')
+        readsender = input('Who would you like to read messages from?: ')
+    elif readmessage == 2:
+        print('What ')
+    
+def checkRealPassword(username, password, connection):
+    passwordencode = password.encode('utf-8')
+
+    cursor = connection.cursor()
+    passwordquery = "SELECT password FROM users WHERE username=%s;"
+    cursor.execute(passwordquery, username)
+    connection.commit()
+    hash = cursor.fetchone()[0]
+    hashencode = hash.encode('utf-8')
+
+    result = bcrypt.checkpw(passwordencode, hashencode)
+    return result
 
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
-        connection = pymysql.connect(host=HOST, user='root', database='db262')
+        connection = connectsql()
         cursor = connection.cursor()
-        connection.commit()
-
-        with connection:
-            with connection.cursor() as cursor:
-                cursor.execute("CREATE TABLE IF NOT EXISTS users (username VARCHAR(255) NOT NULL PRIMARY KEY, password VARCHAR(255) NOT NULL);")
-                sql = "INSERT INTO users (username, password) VALUES (%s, %s);"
-                # cursor.execute(sql, (username, password))
-
-                connection.commit()
 
         user_id = s.getsockname()[1]  # Get client's port number as user ID
 
         threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
 
         while True:
+            logged_in = False
             msg = input()
             if msg == '1':
-                username = input("Username?: ")
-                # check to see if this username exists in db
-                password = input("Password?: ")
-                # check to see if this password matches
-                # if matches:
-                print(f'Welcome back {username}!')
-                # else: print error
-                logged_in = True
-            elif msg == '2':
-                username = input("Welcome first-time user! Enter a username: ")
+                username = input("Welcome first-time user! Enter a username. All characters must be alphanumeric: ")
                     # check if username is valid --> if not give error
-                password = input("Enter a password: ")
-                    # check if password is valid
-                    # if so then hash and verify success, else give error
+                password = input("Enter a password (Minimum 7 characters, at least one upper case alphabet character, at least 1 number between [0-9], and at least one special character [_, @, $, #, !]): ")
+                # If password valid, then hash and verify successful registration; else, give error
+                while True:
+                    if checkValidPassword(password):
+                        hash = hashPass(password)
+                        with connection:
+                            with connection.cursor() as cursor:
+                                accountregister = "INSERT INTO users (username, password) VALUES (%s, %s);"
+                                cursor.execute(accountregister, (username, hash))
+                                connection.commit()
+                        print("Registration Successful!")
+                        break
+                    else:
+                        password = input('Please enter a valid password: ')
+                    
                 if msg.lower() == 'exit':
-                    print("Closing connection...")
+                    print('Closing connection...')
                     break
                 s.sendall(msg.encode())
+            elif msg == '2':
+                username = input('Username: ')
+                while checkRealUsername(username, connection):
+                    password = input('Password: ')
+                    if checkRealPassword(username, password, connection):
+                        print(f'Welcome back {username}!')
+                        logged_in = True
+                        break
+                    else:
+                        print('Password incorrect. Please try again.')
+                        password = input('Password: ')
+                else:
+                    print('Login Failed. Please try again.')
+                    break
+
+            if logged_in:
+                checkMessages()
+            else:
+                print('Closing connection...')
+                break
 
 if __name__ == '__main__':
     main()
