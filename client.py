@@ -69,24 +69,25 @@ def checkRealPassword(username, password, connection):
     return bcrypt.checkpw(passwordencode, stored_hash)
 
 def checkMessages(username, connection, s):
-    # cursor = connection.cursor()
-    # query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
-    # cursor.execute(query, username)
-    # connection.commit()
-    # result = cursor.fetchone()[0]
-    # if result > 0:
-    #     readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
-
-    # if readmessage == 1:
-    #     query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
-    #     cursor.execute(query2)
-    #     connection.commit()
-    #     result = cursor.fetchall()
-    #     for num, sender in result:
-    #         print(f'You have {num} unread messages from {sender}')
-    #     readsender = input('Who would you like to read messages from?: ')
-    # elif readmessage == 2:
-    sendMessage(username, s)
+    cursor = connection.cursor()
+    query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
+    cursor.execute(query, username)
+    connection.commit()
+    result = cursor.fetchone()[0]
+    if result > 0:
+        readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
+        if readmessage == 1:
+            query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
+            cursor.execute(query2)
+            connection.commit()
+            result = cursor.fetchall()
+            for num, sender in result:
+                print(f'You have {num} unread messages from {sender}')
+            readsender = input('Who would you like to read messages from?: ')
+        elif readmessage == 2:
+            sendMessage(username, s)
+    else:
+        sendMessage(username, s)
 
 def sendMessage(sender, s):
     """
@@ -137,7 +138,6 @@ def main():
                 while checkRealUsername(username, connection):
                     password = input('Password: ')
                     if checkRealPassword(username, password, connection):
-                        print("portnum: ", port_num)
                         cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s",
                                        (str(port_num), username))
                         connection.commit()

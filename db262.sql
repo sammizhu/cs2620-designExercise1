@@ -52,7 +52,7 @@ DROP TABLE IF EXISTS `users`;
 CREATE TABLE `users` (
   `username` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
-  `socket_id` VARCHAR(255) NULL,
+  `socket_id` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -63,7 +63,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES ('est','est1', ''),('est1','$2b$12$dOp6LSuaIvcOaUk49YHvFOaNObdTmQXdBN/VtgOSBos8Ej90h7Cdy', '');
+INSERT INTO `users` VALUES ('est','est1',''),('est1','$2b$12$dOp6LSuaIvcOaUk49YHvFOaNObdTmQXdBN/VtgOSBos8Ej90h7Cdy','62646'),('wangzai','$2b$12$n4DUdUlfgZrmQqpE2O19EORZstwkH97ackylC2degMcCBSBCADoYK','62643');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -76,4 +76,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-02-09 15:29:09
+-- Dump completed on 2025-02-09 16:58:43
