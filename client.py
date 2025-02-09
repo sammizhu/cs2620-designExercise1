@@ -59,7 +59,7 @@ def checkRealUsername(username, connection):
         return True
     return False
 
-def checkMessages(username, connection):
+def checkMessages(username, connection, s):
     cursor = connection.cursor()
     query = "SELECT COUNT(*) FROM messages WHERE receiver=%s;"
     cursor.execute(query, username)
@@ -77,7 +77,7 @@ def checkMessages(username, connection):
             print(f'You have {num} unread messages from {sender}')
         readsender = input('Who would you like to read messages from?: ')
     elif readmessage == 2:
-        print('What ')
+        sendMessage(username, s)
     
 def checkRealPassword(username, password, connection):
     passwordencode = password.encode('utf-8')
@@ -91,6 +91,11 @@ def checkRealPassword(username, password, connection):
 
     result = bcrypt.checkpw(passwordencode, hashencode)
     return result
+
+def sendMessage(sender, s):
+    # sender as an input to add to messages table
+    msg = input("Type '@UserID message' to send a DM.\n")
+    s.sendall(msg.encode())
 
 def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -123,10 +128,6 @@ def main():
                     else:
                         password = input('Please enter a valid password: ')
                     
-                if msg.lower() == 'exit':
-                    print('Closing connection...')
-                    break
-                s.sendall(msg.encode())
             elif msg == '2':
                 username = input('Username: ')
                 while checkRealUsername(username, connection):
@@ -142,8 +143,13 @@ def main():
                     print('Login Failed. Please try again.')
                     break
 
+            # elif msg.lower() == 'exit':
+            #     print('Closing connection...')
+            #     break
+            s.sendall(msg.encode())
+
             if logged_in:
-                checkMessages()
+                checkMessages(username, connection, s)
             else:
                 print('Closing connection...')
                 break

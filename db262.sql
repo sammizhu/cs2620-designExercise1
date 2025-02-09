@@ -16,9 +16,18 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
+-- Current Database: `db262`
+--
+
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `db262` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+
+USE `db262`;
+
+--
 -- Table structure for table `users`
 --
 
+DROP TABLE IF EXISTS `users`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `users` (
@@ -28,23 +37,13 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
-CREATE TABLE `messages` (
-  `messageid` INT NOT NULL AUTO_INCREMENT,
-  `receiver` VARCHAR(255) NOT NULL,
-  `sender` VARCHAR(255) NOT NULL,
-  `message` VARCHAR(255),
-  `datetime` DATETIME DEFAULT CURRENT_TIMESTAMP,
-  `isread` BOOLEAN,
-  PRIMARY KEY (`messageid`)
-);
-
 --
 -- Dumping data for table `users`
 --
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES ('est','est1');
+INSERT INTO `users` VALUES ('est','est1'),('sammizhu','$2b$12$r7cPrMzDHchktMxqIn9dlOqaCknFnR/fp..ARImuH74w40WPuJtzG');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -57,4 +56,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-02-08 16:07:03
+-- Dump completed on 2025-02-09 15:27:44
