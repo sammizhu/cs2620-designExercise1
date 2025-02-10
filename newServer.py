@@ -161,11 +161,11 @@ def check_messages_server_side(conn, username):
             unread_count = row['cnt']
 
             if unread_count == 0:
-                conn.sendall("You have 0 unread messages.\nYou: ".encode())
+                conn.sendall("You have 0 unread messages.\n ".encode())
                 return
 
             # If we have unread
-            conn.sendall(f" ------------------------------------------\n| You have {unread_count} unread messages.              |\n| Type '1' to read them, or '2' to skip    |\n| and send new messages.                   |\n ------------------------------------------\nYou: """.encode())
+            conn.sendall(f" ------------------------------------------\n| You have {unread_count} unread messages.              |\n| Type '1' to read them, or '2' to skip    |\n| and send new messages.                   |\n ------------------------------------------\n """.encode())
 
             choice = conn.recv(1024).decode().strip()
 
@@ -179,7 +179,7 @@ def check_messages_server_side(conn, username):
                 # Show which senders
                 senders_info = "\n".join([f"{row['sender']} ({row['num']} messages)" for row in rows])
                 conn.sendall(f"You have unread messages from:\n{senders_info}\n".encode())
-                conn.sendall("Which sender do you want to read from?\nYou: ".encode())
+                conn.sendall("Which sender do you want to read from?\n ".encode())
                 
                 chosen_sender = conn.recv(1024).decode().strip()
                 if not chosen_sender:
@@ -227,7 +227,7 @@ def handle_client(conn, addr):
     logged_in = False
     username = None
 
-    conn.sendall("Welcome! Type '1' to register, '2' to login, or 'logoff' to exit.\nYou: ".encode())
+    conn.sendall("Welcome! Type '1' to register, '2' to login, or 'logoff' to exit.\n ".encode())
 
     try:
         while True:
@@ -249,7 +249,7 @@ def handle_client(conn, addr):
                         logged_in = True
                         # check unread (should be none if newly registered, but let's be consistent)
                         check_messages_server_side(conn, username)
-                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\nYou: ".encode())
+                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\n ".encode())
                 elif data == "2":
                     logged_user = handle_login(conn, user_id)
                     if logged_user:
@@ -257,13 +257,13 @@ def handle_client(conn, addr):
                         logged_in = True
                         # check unread for returning user
                         check_messages_server_side(conn, username)
-                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\nYou: ".encode())
+                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\n ".encode())
                 else:
                     conn.sendall("Please type '1' to register, '2' to login, or 'logoff'.\n".encode())
             
             # If logged in => handle DM sending, check, or logoff
             else:
-                conn.sendall("You: ".encode())
+                conn.sendall(" ".encode())
                 if data.lower() == "logoff":
                     # Mark user inactive
                     with connectsql() as db:
@@ -312,9 +312,8 @@ def handle_client(conn, addr):
                                 cur.execute("SELECT username FROM users")
                                 rows = cur.fetchall()
                         if rows:
-                            print("username: ", username)
                             all_usernames = ", ".join([row['username'] for row in rows if row['username'] != username])
-                            conn.sendall(f"\nAll users:\n{all_usernames}\nYou: ".encode())
+                            conn.sendall(f"\nAll users:\n{all_usernames}\n ".encode())
                         else:
                             conn.sendall("No users found.\n".encode())
                     except Exception as e:
@@ -323,7 +322,7 @@ def handle_client(conn, addr):
                 
                 elif data.lower() == "delete":
                     # Confirm with the user that they want to delete the last message they sent
-                    conn.sendall("Are you sure you want to delete the last message you sent? Type 'yes' or 'no':\nYou: ".encode())
+                    conn.sendall("Are you sure you want to delete the last message you sent? Type 'yes' or 'no':\n ".encode())
                     confirm_resp = conn.recv(1024).decode().strip().lower()
                     if confirm_resp == 'yes':
                         try:
@@ -335,7 +334,7 @@ def handle_client(conn, addr):
                                         last_msg_id = row['messageid']
                                         cur.execute("DELETE FROM messages WHERE messageid=%s", (last_msg_id,))
                                         db.commit()
-                                        conn.sendall("Your last message has been deleted.\nYou: ".encode())
+                                        conn.sendall("Your last message has been deleted.\n ".encode())
                                     else:
                                         conn.sendall("You have not sent any messages to delete.\n".encode())
                         except Exception as e:
@@ -349,7 +348,7 @@ def handle_client(conn, addr):
                     conn.sendall(
                         "Are you sure you want to deactivate your account?\n"
                         "This will remove your account and all messages you've sent.\n"
-                        "Type 'yes' to confirm or 'no' to cancel.\nYou: ".encode()
+                        "Type 'yes' to confirm or 'no' to cancel.\n ".encode()
                     )
                     confirm_resp = conn.recv(1024).decode().strip().lower()
                     if confirm_resp == 'yes':
@@ -373,7 +372,7 @@ def handle_client(conn, addr):
                 
                 else:
                     # unrecognized command
-                    conn.sendall("Error: Messages must start with '@username' or use 'check', 'logoff',' search', 'delete', or 'deactivate'.\nYou: ".encode())
+                    conn.sendall("Error: Messages must start with '@username' or use 'check', 'logoff',' search', 'delete', or 'deactivate'.\n ".encode())
 
     except Exception as e:
         print("Exception in handle_client:", e)
