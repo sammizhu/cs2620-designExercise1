@@ -303,7 +303,8 @@ def handle_client(conn, addr):
                                 cur.execute("SELECT username FROM users")
                                 rows = cur.fetchall()
                         if rows:
-                            all_usernames = ", ".join([row['username'] for row in rows])
+                            print("username: ", username)
+                            all_usernames = ", ".join([row['username'] for row in rows if row['username'] != username])
                             conn.sendall(f"\nAll users:\n{all_usernames}\nYou: ".encode())
                         else:
                             conn.sendall("No users found.\n".encode())
@@ -325,7 +326,7 @@ def handle_client(conn, addr):
                                         last_msg_id = row['messageid']
                                         cur.execute("DELETE FROM messages WHERE messageid=%s", (last_msg_id,))
                                         db.commit()
-                                        conn.sendall("Your last message has been deleted.\n".encode())
+                                        conn.sendall("Your last message has been deleted.\nYou: ".encode())
                                     else:
                                         conn.sendall("You have not sent any messages to delete.\n".encode())
                         except Exception as e:
