@@ -151,61 +151,64 @@ def check_messages_server_side(conn, username):
             row = cur.fetchone()
             unread_count = row['cnt']
 
-            if unread_count > 0:
-                # If we have unread
-                conn.sendall(f" ------------------------------------------\n| You have {unread_count} unread messages.              |\n| Type '1' to read them, or '2' to skip    |\n| and send new messages.                   |\n ------------------------------------------\nYou: """.encode())
+            if unread_count == 0:
+                conn.sendall("You have 0 unread messages.\nYou: ".encode())
+                return
 
-                choice = conn.recv(1024).decode().strip()
+            # If we have unread
+            conn.sendall(f" ------------------------------------------\n| You have {unread_count} unread messages.              |\n| Type '1' to read them, or '2' to skip    |\n| and send new messages.                   |\n ------------------------------------------\nYou: """.encode())
 
-                if choice == "1":
-                    # Let’s see from which sender(s)
-                    cur.execute("SELECT sender, COUNT(*) AS num FROM messages WHERE receiver=%s AND isread=0 GROUP BY sender", (username,))
-                    rows = cur.fetchall()
-                    if not rows:
-                        conn.sendall("No unread messages found (maybe they were just read?).\n".encode())
-                        return
-                    # Show which senders
-                    senders_info = "\n".join([f"{row['sender']} ({row['num']} messages)" for row in rows])
-                    conn.sendall(f"You have unread messages from:\n{senders_info}\n".encode())
-                    conn.sendall("Which sender do you want to read from?\nYou: ".encode())
-                    
-                    chosen_sender = conn.recv(1024).decode().strip()
-                    if not chosen_sender:
-                        conn.sendall("Canceled reading messages.\n".encode())
-                        return
-                    
-                    # Get those unread messages
-                    cur.execute("SELECT messageid, sender, message, datetime FROM messages WHERE receiver=%s AND sender=%s AND isread=0 ORDER BY messageid", (username, chosen_sender))
-                    unread_msgs = cur.fetchall()
-                    if not unread_msgs:
-                        conn.sendall("No unread messages from that user.\n".encode())
-                        return
+            choice = conn.recv(1024).decode().strip()
 
-                    # Print them to the user
-                    conn.sendall(f"--- Unread messages from {chosen_sender} ---\n".encode())
-                    for m in unread_msgs:
-                        ts = m['datetime'].strftime("%Y-%m-%d %H:%M:%S")
-                        conn.sendall(f"[{m['messageid']}] {ts} {m['sender']}: {m['message']}\n".encode())
-                    
-                    # Mark them as read
-                    msg_ids = tuple([m['messageid'] for m in unread_msgs])
-                    # Use an in-clause if you want to be explicit
-                    if len(msg_ids) == 1:
-                        query = "UPDATE messages SET isread=1 WHERE messageid=%s"
-                        cur.execute(query, (msg_ids[0],))
-                    else:
-                        # For multiple
-                        query = f"UPDATE messages SET isread=1 WHERE messageid IN ({','.join(['%s']*len(msg_ids))})"
-                        cur.execute(query, msg_ids)
-                    
-                    db.commit()
-                    conn.sendall("All those messages have been marked as read.\n".encode())
+            if choice == "1":
+                # Let’s see from which sender(s)
+                cur.execute("SELECT sender, COUNT(*) AS num FROM messages WHERE receiver=%s AND isread=0 GROUP BY sender", (username,))
+                rows = cur.fetchall()
+                if not rows:
+                    conn.sendall("No unread messages found (maybe they were just read?).\n".encode())
+                    return
+                # Show which senders
+                senders_info = "\n".join([f"{row['sender']} ({row['num']} messages)" for row in rows])
+                conn.sendall(f"You have unread messages from:\n{senders_info}\n".encode())
+                conn.sendall("Which sender do you want to read from?\nYou: ".encode())
+                
+                chosen_sender = conn.recv(1024).decode().strip()
+                if not chosen_sender:
+                    conn.sendall("Canceled reading messages.\n".encode())
+                    return
+                
+                # Get those unread messages
+                cur.execute("SELECT messageid, sender, message, datetime FROM messages WHERE receiver=%s AND sender=%s AND isread=0 ORDER BY messageid", (username, chosen_sender))
+                unread_msgs = cur.fetchall()
+                if not unread_msgs:
+                    conn.sendall("No unread messages from that user.\n".encode())
+                    return
 
-                elif choice == "2":
-                    # Skips reading, user can continue
-                    return 
+                # Print them to the user
+                conn.sendall(f"--- Unread messages from {chosen_sender} ---\n".encode())
+                for m in unread_msgs:
+                    ts = m['datetime'].strftime("%Y-%m-%d %H:%M:%S")
+                    conn.sendall(f"[{m['messageid']}] {ts} {m['sender']}: {m['message']}\n".encode())
+                
+                # Mark them as read
+                msg_ids = tuple([m['messageid'] for m in unread_msgs])
+                # Use an in-clause if you want to be explicit
+                if len(msg_ids) == 1:
+                    query = "UPDATE messages SET isread=1 WHERE messageid=%s"
+                    cur.execute(query, (msg_ids[0],))
                 else:
-                    conn.sendall("Invalid choice. Returning to main.\n".encode())
+                    # For multiple
+                    query = f"UPDATE messages SET isread=1 WHERE messageid IN ({','.join(['%s']*len(msg_ids))})"
+                    cur.execute(query, msg_ids)
+                
+                db.commit()
+                conn.sendall("All those messages have been marked as read.\n".encode())
+
+            elif choice == "2":
+                # Skips reading, user can continue
+                return 
+            else:
+                conn.sendall("Invalid choice. Returning to main.\n".encode())
 
 def handle_client(conn, addr):
     user_id = addr[1]
@@ -301,7 +304,7 @@ def handle_client(conn, addr):
                                 rows = cur.fetchall()
                         if rows:
                             all_usernames = ", ".join([row['username'] for row in rows])
-                            conn.sendall(f"All users:\n{all_usernames}\n".encode())
+                            conn.sendall(f"\nAll users:\n{all_usernames}\nYou: ".encode())
                         else:
                             conn.sendall("No users found.\n".encode())
                     except Exception as e:
@@ -360,7 +363,7 @@ def handle_client(conn, addr):
                 
                 else:
                     # unrecognized command
-                    conn.sendall("Error: Messages must start with '@username' or use 'check', 'logoff',' search', 'delete', or 'deactivate'.\n".encode())
+                    conn.sendall("Error: Messages must start with '@username' or use 'check', 'logoff',' search', 'delete', or 'deactivate'.\nYou: ".encode())
 
     except Exception as e:
         print("Exception in handle_client:", e)
