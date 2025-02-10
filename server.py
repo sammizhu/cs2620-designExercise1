@@ -60,6 +60,19 @@ def handle_client(conn, addr):
             if not data:
                 break  # Client disconnected
 
+            if data.lower() == "logoff":
+                connection = connectsql()
+                cursor = connection.cursor()
+                cursor.execute("SELECT socket_id FROM users WHERE username = %s", target_username)
+                result= cursor.fetchone()
+                if result:
+                    username = int(result[0])
+                cursor.execute("UPDATE users SET active=0 WHERE username=%s", (username,))
+                connection.commit()
+                connection.close()
+                conn.sendall("Logged off.\n".encode())
+                break
+
             # If the client types something like "@someUserID message"
             if data.startswith("@"):
                 # e.g. "@12345 some message"
@@ -79,7 +92,6 @@ def handle_client(conn, addr):
                     cursor.execute("SELECT socket_id FROM users WHERE username = %s", target_username)
                     result = cursor.fetchone()
                     if result:
-                        # If that user is stored with a particular ephemeral port, route the message
                         target_id = int(result[0])
                         send_message(message, target_id, target_username, user_id)
                     else:

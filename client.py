@@ -75,7 +75,7 @@ def checkMessages(username, connection, s):
     connection.commit()
     result = cursor.fetchone()[0]
     if result > 0:
-        readmessage = input('You have %i unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
+        readmessage = input(f'You have {result} unread messages. Would you like to read them? Select 1 to read messages. Select 2 to send a new message.')
         if readmessage == 1:
             query2 = "SELECT COUNT(message), sender FROM messages GROUP by sender"
             cursor.execute(query2)
@@ -93,12 +93,13 @@ def sendMessage(sender, s):
     """
     Instead of just sending one message and quitting,
     let's allow the user to send multiple messages in a loop.
+
     """
     print("Type '@UserID message' to send a DM (or 'quit' to exit).")
     while True:
         print("You: ", end="", flush=True)
         msg = input() 
-        if msg.lower() == 'quit':
+        if msg.lower() == 'exit': # leave conversation with this person but not logging off
             break
         s.sendall(msg.encode())
 def main():
@@ -107,7 +108,7 @@ def main():
         connection = connectsql()
         cursor = connection.cursor()
 
-        port_num = s.getsockname()[1]  # Get the ephemeral port for this client
+        port_num = s.getsockname()[1]  
 
         # Start background thread to listen for incoming server messages
         threading.Thread(target=receive_messages, args=(s,), daemon=True).start()
@@ -118,6 +119,11 @@ def main():
             if msg == '1':
                 # Registration
                 username = input("Welcome first-time user! Enter a username (alphanumeric): ")
+                while True:
+                    if checkRealUsername(username, connection):
+                        username = input("Username taken. Please select new username: ")
+                    else: 
+                        break
                 password = input("Enter a password (>=7 chars, 1 uppercase, 1 digit, 1 special): ")
                 
                 while True:
@@ -127,7 +133,10 @@ def main():
                             accountregister = "INSERT INTO users (username, password) VALUES (%s, %s);"
                             cursor.execute(accountregister, (username, hashed_pass))
                             connection.commit()
+                            cursor.execute("UPDATE users SET socket_id = %s, active=1 WHERE username = %s", (str(port_num), username))
+                            connection.commit()
                         print("Registration Successful!")
+                        logged_in = True
                         break
                     else:
                         password = input('Please enter a valid password: ')
@@ -138,10 +147,9 @@ def main():
                 while checkRealUsername(username, connection):
                     password = input('Password: ')
                     if checkRealPassword(username, password, connection):
-                        cursor.execute("UPDATE users SET socket_id = %s WHERE username = %s",
-                                       (str(port_num), username))
-                        connection.commit()
                         print(f'Welcome back {username}!')
+                        cursor.execute("UPDATE users SET socket_id = %s, active=1 WHERE username = %s", (str(port_num), username))
+                        connection.commit()
                         logged_in = True
                         break
                     else:
