@@ -4,6 +4,10 @@ import pymysql
 import pymysql.cursors
 import bcrypt
 import traceback
+import tkinter as tk
+from tkinter import *
+from tkinter import ttk
+from tkinter import scrolledtext
 
 HOST = '127.0.0.1'
 PORT = 65432
@@ -382,12 +386,62 @@ def handle_client(conn, addr):
         conn.close()
         print(f"Connection with {addr} closed.")
 
+class App(tk.Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.pack()
+
+        self.entrythingy = tk.Entry()
+        self.entrythingy.pack()
+
+        # Create the application variable.
+        self.contents = tk.StringVar()
+        # Set it to some value.
+        self.contents.set("this is a variable")
+        # Tell the entry widget to watch this variable.
+        self.entrythingy["textvariable"] = self.contents
+
+        # Define a callback for when the user hits return.
+        # It prints the current value of the variable.
+        self.entrythingy.bind('<Key-Return>',
+                             self.print_contents)
+
+    def print_contents(self, event):
+        print("Hi. The current entry content is:",
+              self.contents.get())
+
 def start_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((HOST, PORT))
         server_socket.listen()
         print(f"Server listening on {HOST}:{PORT}...")
+
+        # root = Tk()
+        # myapp = App(root)
+        # myapp.mainloop()
+
+        # root.title("ScrolledText Widget Example") 
+  
+        # ttk.Label(root, text="ScrolledText Widget Example", 
+        #         font=("Times New Roman", 15)).grid(column=0, row=0) 
+        # ttk.Label(root, text="Enter your comments :", font=("Bold", 12)).grid(column=0, row=1) 
+        
+        # text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, 
+        #                                     width=40, height=8, 
+        #                                     font=("Times New Roman", 15)) 
+        
+        # text_area.grid(column=0, row=2, pady=10, padx=10) 
+        
+        # # placing cursor in text area 
+        # text_area.focus() 
+        # root.mainloop()
+
+        # frm = ttk.Frame(root, padding=10)
+        # frm.grid()
+        # ttk.Label(frm, text="Hello World!").grid(column=0, row=0)
+        # ttk.Button(frm, text="Quit", command=root.destroy).grid(column=1, row=0)
+        # root.mainloop()
 
         while True:
             conn, addr = server_socket.accept()
