@@ -292,16 +292,71 @@ def handle_client(conn, addr):
                         traceback.print_exc()
                         conn.sendall("Error storing/sending message.\n".encode())
                 
-                # elif data.lower() == "search":
-                #     # doesn't take any inputs, if a types this just send them a list of all the usernames from the users table
+                elif data.lower() == "search":
+                    # List all users in the users table
+                    try:
+                        with connectsql() as db:
+                            with db.cursor() as cur:
+                                cur.execute("SELECT username FROM users")
+                                rows = cur.fetchall()
+                        if rows:
+                            all_usernames = ", ".join([row['username'] for row in rows])
+                            conn.sendall(f"All users:\n{all_usernames}\n".encode())
+                        else:
+                            conn.sendall("No users found.\n".encode())
+                    except Exception as e:
+                        traceback.print_exc()
+                        conn.sendall("Error while searching for users.\n".encode())
                 
-                # elif data.lower() == "delete":
-                #     # confirm with user that they want to delete the last message that they sent. if they say yes, then this will delete the
-                #     # last message from the messages table sent by them 
+                elif data.lower() == "delete":
+                    # Confirm with the user that they want to delete the last message they sent
+                    conn.sendall("Are you sure you want to delete the last message you sent? Type 'yes' or 'no':\nYou: ".encode())
+                    confirm_resp = conn.recv(1024).decode().strip().lower()
+                    if confirm_resp == 'yes':
+                        try:
+                            with connectsql() as db:
+                                with db.cursor() as cur:
+                                    cur.execute("SELECT messageid FROM messages WHERE sender=%s ORDER BY messageid DESC LIMIT 1""", (username,))
+                                    row = cur.fetchone()
+                                    if row:
+                                        last_msg_id = row['messageid']
+                                        cur.execute("DELETE FROM messages WHERE messageid=%s", (last_msg_id,))
+                                        db.commit()
+                                        conn.sendall("Your last message has been deleted.\n".encode())
+                                    else:
+                                        conn.sendall("You have not sent any messages to delete.\n".encode())
+                        except Exception as e:
+                            traceback.print_exc()
+                            conn.sendall("Error deleting your last message.\n".encode())
+                    else:
+                        conn.sendall("Delete canceled.\n".encode())
 
-                # elif data.lower() == "deactivate":
-                #     # confirm with the user that this will deactive their account, if they say yes then we will delete their account from the users table 
-                    # along will all messages sent by them in the messages table
+                elif data.lower() == "deactivate":
+                    # Confirm with the user that this will deactivate (delete) their account
+                    conn.sendall(
+                        "Are you sure you want to deactivate your account?\n"
+                        "This will remove your account and all messages you've sent.\n"
+                        "Type 'yes' to confirm or 'no' to cancel.\nYou: ".encode()
+                    )
+                    confirm_resp = conn.recv(1024).decode().strip().lower()
+                    if confirm_resp == 'yes':
+                        try:
+                            with connectsql() as db:
+                                with db.cursor() as cur:
+                                    # Delete all messages sent by this user
+                                    cur.execute("DELETE FROM messages WHERE sender=%s", (username,))
+                                    # Delete the user record
+                                    cur.execute("DELETE FROM users WHERE username=%s", (username,))
+                                    db.commit()
+                            conn.sendall("Your account and all your sent messages have been removed. Goodbye.\n".encode())
+                        except Exception as e:
+                            traceback.print_exc()
+                            conn.sendall("Error deactivating your account.\n".encode())
+                        finally:
+                            # Force a break so we exit the loop and close connection
+                            break
+                    else:
+                        conn.sendall("Account deactivation canceled.\n".encode())
                 
                 else:
                     # unrecognized command
