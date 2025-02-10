@@ -4,10 +4,6 @@ import pymysql
 import pymysql.cursors
 import bcrypt
 import traceback
-import tkinter as tk
-from tkinter import *
-from tkinter import ttk
-from tkinter import scrolledtext
 
 HOST = '127.0.0.1'
 PORT = 65432
@@ -165,11 +161,11 @@ def check_messages_server_side(conn, username):
             unread_count = row['cnt']
 
             if unread_count == 0:
-                conn.sendall("You have 0 unread messages.\nYou: ".encode())
+                conn.sendall("You have 0 unread messages.\n ".encode())
                 return
 
             # If we have unread
-            conn.sendall(f" ------------------------------------------\n| You have {unread_count} unread messages.              |\n| Type '1' to read them, or '2' to skip    |\n| and send new messages.                   |\n ------------------------------------------\nYou: """.encode())
+            conn.sendall(f" ------------------------------------------\n| You have {unread_count} unread messages.              |\n| Type '1' to read them, or '2' to skip    |\n| and send new messages.                   |\n ------------------------------------------\n """.encode())
 
             choice = conn.recv(1024).decode().strip()
 
@@ -183,7 +179,7 @@ def check_messages_server_side(conn, username):
                 # Show which senders
                 senders_info = "\n".join([f"{row['sender']} ({row['num']} messages)" for row in rows])
                 conn.sendall(f"You have unread messages from:\n{senders_info}\n".encode())
-                conn.sendall("Which sender do you want to read from?\nYou: ".encode())
+                conn.sendall("Which sender do you want to read from?\n ".encode())
                 
                 chosen_sender = conn.recv(1024).decode().strip()
                 if not chosen_sender:
@@ -231,7 +227,7 @@ def handle_client(conn, addr):
     logged_in = False
     username = None
 
-    conn.sendall("Welcome! Type '1' to register, '2' to login, or 'logoff' to exit.\nYou: ".encode())
+    conn.sendall("Welcome! Type '1' to register, '2' to login, or 'logoff' to exit.\n ".encode())
 
     try:
         while True:
@@ -253,7 +249,7 @@ def handle_client(conn, addr):
                         logged_in = True
                         # check unread (should be none if newly registered, but let's be consistent)
                         check_messages_server_side(conn, username)
-                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\nYou: ".encode())
+                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\n ".encode())
                 elif data == "2":
                     logged_user = handle_login(conn, user_id)
                     if logged_user:
@@ -261,13 +257,13 @@ def handle_client(conn, addr):
                         logged_in = True
                         # check unread for returning user
                         check_messages_server_side(conn, username)
-                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\nYou: ".encode())
+                        conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\n ".encode())
                 else:
                     conn.sendall("Please type '1' to register, '2' to login, or 'logoff'.\n".encode())
             
             # If logged in => handle DM sending, check, or logoff
             else:
-                conn.sendall("You: ".encode())
+                conn.sendall(" ".encode())
                 if data.lower() == "logoff":
                     # Mark user inactive
                     with connectsql() as db:
@@ -316,9 +312,8 @@ def handle_client(conn, addr):
                                 cur.execute("SELECT username FROM users")
                                 rows = cur.fetchall()
                         if rows:
-                            print("username: ", username)
                             all_usernames = ", ".join([row['username'] for row in rows if row['username'] != username])
-                            conn.sendall(f"\nAll users:\n{all_usernames}\nYou: ".encode())
+                            conn.sendall(f"\nAll users:\n{all_usernames}\n ".encode())
                         else:
                             conn.sendall("No users found.\n".encode())
                     except Exception as e:
@@ -327,7 +322,7 @@ def handle_client(conn, addr):
                 
                 elif data.lower() == "delete":
                     # Confirm with the user that they want to delete the last message they sent
-                    conn.sendall("Are you sure you want to delete the last message you sent? Type 'yes' or 'no':\nYou: ".encode())
+                    conn.sendall("Are you sure you want to delete the last message you sent? Type 'yes' or 'no':\n ".encode())
                     confirm_resp = conn.recv(1024).decode().strip().lower()
                     if confirm_resp == 'yes':
                         try:
@@ -339,7 +334,7 @@ def handle_client(conn, addr):
                                         last_msg_id = row['messageid']
                                         cur.execute("DELETE FROM messages WHERE messageid=%s", (last_msg_id,))
                                         db.commit()
-                                        conn.sendall("Your last message has been deleted.\nYou: ".encode())
+                                        conn.sendall("Your last message has been deleted.\n ".encode())
                                     else:
                                         conn.sendall("You have not sent any messages to delete.\n".encode())
                         except Exception as e:
@@ -353,7 +348,7 @@ def handle_client(conn, addr):
                     conn.sendall(
                         "Are you sure you want to deactivate your account?\n"
                         "This will remove your account and all messages you've sent.\n"
-                        "Type 'yes' to confirm or 'no' to cancel.\nYou: ".encode()
+                        "Type 'yes' to confirm or 'no' to cancel.\n ".encode()
                     )
                     confirm_resp = conn.recv(1024).decode().strip().lower()
                     if confirm_resp == 'yes':
@@ -377,7 +372,7 @@ def handle_client(conn, addr):
                 
                 else:
                     # unrecognized command
-                    conn.sendall("Error: Messages must start with '@username' or use 'check', 'logoff',' search', 'delete', or 'deactivate'.\nYou: ".encode())
+                    conn.sendall("Error: Messages must start with '@username' or use 'check', 'logoff',' search', 'delete', or 'deactivate'.\n ".encode())
 
     except Exception as e:
         print("Exception in handle_client:", e)
@@ -395,62 +390,12 @@ def handle_client(conn, addr):
         conn.close()
         print(f"Connection with {addr} closed.")
 
-class App(tk.Frame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.pack()
-
-        self.entrythingy = tk.Entry()
-        self.entrythingy.pack()
-
-        # Create the application variable.
-        self.contents = tk.StringVar()
-        # Set it to some value.
-        self.contents.set("this is a variable")
-        # Tell the entry widget to watch this variable.
-        self.entrythingy["textvariable"] = self.contents
-
-        # Define a callback for when the user hits return.
-        # It prints the current value of the variable.
-        self.entrythingy.bind('<Key-Return>',
-                             self.print_contents)
-
-    def print_contents(self, event):
-        print("Hi. The current entry content is:",
-              self.contents.get())
-
 def start_server():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((HOST, PORT))
         server_socket.listen()
         print(f"Server listening on {HOST}:{PORT}...")
-
-        # root = Tk()
-        # myapp = App(root)
-        # myapp.mainloop()
-
-        # root.title("ScrolledText Widget Example") 
-  
-        # ttk.Label(root, text="ScrolledText Widget Example", 
-        #         font=("Times New Roman", 15)).grid(column=0, row=0) 
-        # ttk.Label(root, text="Enter your comments :", font=("Bold", 12)).grid(column=0, row=1) 
-        
-        # text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD, 
-        #                                     width=40, height=8, 
-        #                                     font=("Times New Roman", 15)) 
-        
-        # text_area.grid(column=0, row=2, pady=10, padx=10) 
-        
-        # # placing cursor in text area 
-        # text_area.focus() 
-        # root.mainloop()
-
-        # frm = ttk.Frame(root, padding=10)
-        # frm.grid()
-        # ttk.Label(frm, text="Hello World!").grid(column=0, row=0)
-        # ttk.Button(frm, text="Quit", command=root.destroy).grid(column=1, row=0)
-        # root.mainloop()
 
         while True:
             conn, addr = server_socket.accept()
