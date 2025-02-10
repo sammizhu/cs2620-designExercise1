@@ -2,6 +2,7 @@ import socket
 import threading
 import pymysql
 import pymysql.cursors
+import traceback
 
 # NEED TO REMOVE THIS LATER!!
 HOST = '127.0.0.1'
@@ -13,7 +14,7 @@ def connectsql():
     connection = pymysql.connect(host=HOST, user='root', database='db262')
     return connection
 
-def send_message(message, target_id, sender_id):
+def send_message(message, target_id, target_username, sender_id):
     """Send a private message to a specific client.
 
     sender_id and target_id are ephemeral ports in your current design.
@@ -23,7 +24,7 @@ def send_message(message, target_id, sender_id):
     # Do a quick DB lookup to find the sender's username from their stored socket_id
     connection = connectsql()
     cursor = connection.cursor()
-    cursor.execute("SELECT username FROM users WHERE socket_id = %s", (str(sender_id),))
+    cursor.execute("SELECT username FROM users WHERE socket_id = %s", str(sender_id))
     row = cursor.fetchone()
     if row:
         sender_username = row[0]
@@ -33,9 +34,12 @@ def send_message(message, target_id, sender_id):
 
     if target_id in clients:
         try:
+            cursor.execute("INSERT INTO messages (receiver, sender, message) VALUES (%s, %s, %s)", (str(target_username), str(sender_username), message))
+            connection.commit()
             clients[target_id].sendall(f"{sender_username}: {message}".encode())
         except:
             print(f"Error sending message to {target_id}.")
+            traceback.print_exc()
     else:
         # Let the sender know that the target wasn't found
         if sender_id in clients:
@@ -72,12 +76,12 @@ def handle_client(conn, addr):
                     # Look up that username's socket_id in the DB
                     connection = connectsql()
                     cursor = connection.cursor()
-                    cursor.execute("SELECT socket_id FROM users WHERE username = %s", (target_username,))
+                    cursor.execute("SELECT socket_id FROM users WHERE username = %s", target_username)
                     result = cursor.fetchone()
                     if result:
                         # If that user is stored with a particular ephemeral port, route the message
                         target_id = int(result[0])
-                        send_message(message, target_id, user_id)
+                        send_message(message, target_id, target_username, user_id)
                     else:
                         conn.sendall("User not found.\n".encode())
                 except ValueError:
