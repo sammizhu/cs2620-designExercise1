@@ -186,33 +186,46 @@ def check_messages_server_side(conn, username):
                     conn.sendall("Canceled reading messages.\n".encode())
                     return
                 
-                # Get those unread messages
-                cur.execute("SELECT messageid, sender, message, datetime FROM messages WHERE receiver=%s AND sender=%s AND isread=0 ORDER BY messageid", (username, chosen_sender))
+                # Fetch unread messages from the database
+                cur.execute(
+                    "SELECT messageid, sender, message, datetime FROM messages "
+                    "WHERE receiver=%s AND sender=%s AND isread=0 ORDER BY messageid",
+                    (username, chosen_sender)
+                )
                 unread_msgs = cur.fetchall()
+
                 if not unread_msgs:
                     conn.sendall("No unread messages from that user.\n".encode())
                     return
 
-                # Print them to the user
-                conn.sendall(f"--- Unread messages from {chosen_sender} ---\n".encode())
-                for m in unread_msgs:
-                    ts = m['datetime'].strftime("%Y-%m-%d %H:%M:%S")
-                    conn.sendall(f"[{m['messageid']}] {ts} {m['sender']}: {m['message']}\n".encode())
-                
-                # Mark them as read
-                msg_ids = tuple([m['messageid'] for m in unread_msgs])
-                # Use an in-clause if you want to be explicit
-                if len(msg_ids) == 1:
-                    query = "UPDATE messages SET isread=1 WHERE messageid=%s"
-                    cur.execute(query, (msg_ids[0],))
-                else:
-                    # For multiple
-                    query = f"UPDATE messages SET isread=1 WHERE messageid IN ({','.join(['%s']*len(msg_ids))})"
-                    cur.execute(query, msg_ids)
-                
-                db.commit()
-                conn.sendall("All those messages have been marked as read.\n".encode())
+                # Batch size: if more than 10 messages, use batches of 5; otherwise, show all
+                batch_size = 5 if len(unread_msgs) > 10 else len(unread_msgs)
 
+                conn.sendall(f"--- Unread messages from {chosen_sender} ---\n".encode())
+
+                for i in range(0, len(unread_msgs), batch_size):
+                    batch = unread_msgs[i:i+batch_size]
+                    
+                    for m in batch:
+                        ts = m['datetime'].strftime("%Y-%m-%d %H:%M:%S")
+                        conn.sendall(f"{ts} {m['sender']}: {m['message']}\n".encode())
+                    
+                    # Mark the current batch as read in the database
+                    batch_ids = [m['messageid'] for m in batch]
+                    if len(batch_ids) == 1:
+                        cur.execute("UPDATE messages SET isread=1 WHERE messageid=%s", (batch_ids[0],))
+                    else:
+                        placeholders = ','.join(['%s'] * len(batch_ids))
+                        query = f"UPDATE messages SET isread=1 WHERE messageid IN ({placeholders})"
+                        cur.execute(query, batch_ids)
+                    
+                    db.commit()
+                    conn.sendall("The current batch of messages has been marked as read.\n".encode())
+
+                    # If there are more messages, wait for the user input before showing the next batch.
+                    if i + batch_size < len(unread_msgs):
+                        conn.sendall("Type anything to see the next batch of messages...\n".encode())
+                        _ = conn.recv(1024)  # Wait for user input
             elif choice == "2":
                 # Skips reading, user can continue
                 return 
@@ -298,6 +311,12 @@ def handle_client(conn, addr):
                                 if row and row['socket_id'] and row['socket_id'].isdigit() and row['active']:
                                     tsid = int(row['socket_id'])
                                     if tsid in clients:
+                                        cur.execute("SELECT messageid FROM messages WHERE message=%s", (message))
+                                        msg_id = cur.fetchall()
+                                        msg_ids = tuple([m['messageid'] for m in msg_id])
+                                        query = "UPDATE messages SET isread=1 WHERE messageid=%s"
+                                        cur.execute(query, (msg_ids[0],))
+                                        db.commit()
                                         clients[tsid].sendall(f"{username}: {message}\n".encode())
 
                     except Exception:
@@ -334,7 +353,7 @@ def handle_client(conn, addr):
                                         last_msg_id = row['messageid']
                                         cur.execute("DELETE FROM messages WHERE messageid=%s", (last_msg_id,))
                                         db.commit()
-                                        conn.sendall("Your last message has been deleted.\n ".encode())
+                                        conn.sendall("Your last message has been deleted.\nNote if the recipient saw the message, it does not delete it on their end.\n ".encode())
                                     else:
                                         conn.sendall("You have not sent any messages to delete.\n".encode())
                         except Exception as e:
