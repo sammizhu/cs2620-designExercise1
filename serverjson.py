@@ -18,16 +18,13 @@ args = parser.parse_args()
 HOST = args.host
 PORT = args.port
 
-# HOST = '127.0.0.1'
-# PORT = 65432
-
 clients = {}
 
 def connectsql():
     return pymysql.connect(
         host=HOST,
         user='root',
-        password='', 
+        password='',
         database='db262',
         cursorclass=pymysql.cursors.DictCursor
     )
@@ -65,7 +62,7 @@ def checkRealPassword(username, plain_text):
 def handle_registration(conn, user_id):
     # 1) Prompt repeatedly for username until it is a valid username
     while True:
-        json_register_username = {"command": "1", 
+        json_register_username = {"command": "1",
                                   "server_message": "Enter a username (alphanumeric): "}
         conn.sendall(json.dumps(json_register_username).encode('utf-8'))
 
@@ -78,20 +75,20 @@ def handle_registration(conn, user_id):
                                     "server_message": "Registration canceled.\n"}
             conn.sendall(json.dumps(json_register_cancel).encode('utf-8'))
             return None
-        
+
         # If username is taken, let user know and loop again
         if checkRealUsername(reg_username):
-            json_register_checkusername = {"command": "1", 
+            json_register_checkusername = {"command": "1",
                                            "server_message": "Username taken. Please choose another.\n"}
             conn.sendall(json.dumps(json_register_checkusername).encode('utf-8'))
             continue
         else:
             # Good username
             break
-    
+
     # 2) Prompt repeatedly for password until valid
     while True:
-        json_register_password = {"command": "1", 
+        json_register_password = {"command": "1",
                                   "server_message": "Enter a password (>=7 chars, including uppercase, digit, special): "}
         conn.sendall(json.dumps(json_register_password).encode('utf-8'))
 
@@ -162,18 +159,18 @@ def handle_login(conn, user_id):
                                  "server_message": "Login canceled.\n"}
             conn.sendall(json.dumps(json_login_cancel).encode('utf-8'))
             return None
-        
+
         if not checkRealUsername(login_username):
-            json_login_checkusername = {"command": "2", 
+            json_login_checkusername = {"command": "2",
                                         "server_message": "User not found. Please try again.\n"}
             conn.sendall(json.dumps(json_login_checkusername).encode('utf-8'))
-            
+
         else:
             break
 
     # Prompt repeatedly for password until correct
     while True:
-        json_login_password = {"command": "2", 
+        json_login_password = {"command": "2",
                                "server_message": "Enter your password: "}
         conn.sendall(json.dumps(json_login_password).encode('utf-8'))
 
@@ -254,7 +251,7 @@ def check_messages_server_side(conn, username):
                 json_checkmessage_sender = {"command": "checkmessage",
                                             "server_message": "Which sender do you want to read from?\n "}
                 conn.sendall(json.dumps(json_checkmessage_sender).encode('utf-8'))
-                
+
                 chosen_sender_jsonstr = conn.recv(1024).decode('utf-8')
                 chosen_sender = json.loads(chosen_sender_jsonstr)["sender"] ### FIX ###
 
@@ -263,7 +260,7 @@ def check_messages_server_side(conn, username):
                                                 "server_message": "Canceled reading messages.\n"}
                     conn.sendall(json.dumps(json_checkmessage_cancel).encode('utf-8'))
                     return
-                
+
                 # Fetch unread messages from the database
                 cur.execute(
                     "SELECT messageid, sender, message, datetime FROM messages "
@@ -288,7 +285,7 @@ def check_messages_server_side(conn, username):
 
                 for i in range(0, len(unread_msgs), batch_size):
                     batch = unread_msgs[i:i+batch_size]
-                    
+
                     for m in batch:
                         ts = m['datetime'].strftime("%Y-%m-%d %H:%M:%S")
                         json_checkmessage_batch = {"command": "checkmessage",
@@ -297,7 +294,7 @@ def check_messages_server_side(conn, username):
                                                    "sender": m['sender'],
                                                    "message": m['message']}
                         conn.sendall(json.dumps(json_checkmessage_batch).encode('utf-8'))
-                    
+
                     # Mark the current batch as read in the database
                     batch_ids = [m['messageid'] for m in batch]
                     if len(batch_ids) == 1:
@@ -306,7 +303,7 @@ def check_messages_server_side(conn, username):
                         placeholders = ','.join(['%s'] * len(batch_ids))
                         query = f"UPDATE messages SET isread=1 WHERE messageid IN ({placeholders})"
                         cur.execute(query, batch_ids)
-                    
+
                     db.commit()
                     json_checkmessage_markedread = {"command": "checkmessage",
                                                     "server_message": "The current batch of messages has been marked as read.\n"}
@@ -317,7 +314,7 @@ def check_messages_server_side(conn, username):
                         json_checkmessage_nextbatch = {"command": "checkmessage",
                                                        "server_message": "Type anything to see the next batch of messages...\n"}
                         conn.sendall(json.dumps(json_checkmessage_nextbatch).encode('utf-8'))
-                        
+
                         # Doesn't matter what input is ### FIX ###
                         _ = conn.recv(1024)  # Wait for user input
             elif choice == "2":
@@ -332,7 +329,7 @@ def handle_client(conn, addr):
     user_id = addr[1]
     clients[user_id] = conn
     print(f"New connection from {addr}")
-    
+
     logged_in = False
     username = None
 
@@ -383,7 +380,7 @@ def handle_client(conn, addr):
 
                 elif data.lower() == "check":
                     check_messages_server_side(conn, username)
-                
+
                 elif data.startswith("@"):
                     # Parse DM
                     parts = data.split(" ", 1)
@@ -399,7 +396,7 @@ def handle_client(conn, addr):
                                 cur.execute("INSERT INTO messages (receiver, sender, message, isread) VALUES (%s, %s, %s, 0)", (target_username, username, message))
                                 db.commit()
 
-                                # If target online, send message; otherwise just keep it stored in messages table above
+                                # If target online, send message; otherwise just keep it stored in messages table
                                 cur.execute("SELECT socket_id, active FROM users WHERE username=%s", (target_username,))
                                 row = cur.fetchone()
                                 if row and row['socket_id'] and row['socket_id'].isdigit() and row['active']:
@@ -421,7 +418,7 @@ def handle_client(conn, addr):
                         json_handleclient_errorsend = {"command": "sendmessage",
                                                        "server_message": "Error storing/sending message.\n"}
                         conn.sendall(json.dumps(json_handleclient_errorsend).encode('utf-8'))
-                
+
                 elif data.lower() == "search":
                     # List all users in the users table
                     try:
@@ -444,7 +441,7 @@ def handle_client(conn, addr):
                         json_handleclient_errorsearch = {"command": "search",
                                                          "server_message": "Error while searching for users.\n"}
                         conn.sendall(json.dumps(json_handleclient_errorsearch).encode('utf-8'))
-                
+
                 elif data.lower() == "delete":
                     # Check if user has sent any unread messages
                     try:
@@ -474,7 +471,7 @@ def handle_client(conn, addr):
                                         conn.sendall(json.dumps(json_handleclient_deletecancel).encode('utf-8'))
                                 else:
                                     json_handleclient_no_delete = {"command": "delete",
-                                                                    "server_message": "You have not sent any messages able to be deleted. Note that you cannot delete messages already read.\n"}
+                                                                  "server_message": "You have not sent any messages able to be deleted. Note that you cannot delete messages already read.\n"}
                                     conn.sendall(json.dumps(json_handleclient_no_delete).encode('utf-8'))
                     except Exception as e:
                         traceback.print_exc()
@@ -506,7 +503,7 @@ def handle_client(conn, addr):
                         except Exception as e:
                             traceback.print_exc()
                             json_handleclient_deactivateerror = {"command": "deactivate",
-                                                                "server_message": "Error deactivating your account.\n"}
+                                                                 "server_message": "Error deactivating your account.\n"}
                             conn.sendall(json.dumps(json_handleclient_deactivateerror).encode('utf-8'))
                         finally:
                             # Force a break so we exit the loop and close connection
