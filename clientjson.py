@@ -3,10 +3,19 @@ from tkinter import scrolledtext
 import threading
 import socket
 import queue
+import argparse
+import os
 import json
 
-HOST = '127.0.0.1'
-PORT = 65432
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Start the chat client.")
+parser.add_argument("--host", default=os.getenv("CHAT_SERVER_HOST", "127.0.0.1"), help="Server hostname or IP")
+parser.add_argument("--port", type=int, default=int(os.getenv("CHAT_SERVER_PORT", 65432)), help="Port number")
+args = parser.parse_args()
+
+# Use argument or environment variable
+HOST = args.host
+PORT = args.port
 
 class ChatClient:
     def __init__(self):
@@ -65,7 +74,6 @@ class ChatClient:
         tk.Entry(self.login_frame, textvariable=self.login_password_var, show="*").pack(pady=5)
 
         tk.Button(self.login_frame, text="Submit", width=10, command=self.handle_login).pack(pady=5)
-        tk.Button(self.login_frame, text="Back", width=10, command=self.show_welcome_page).pack(pady=5)
 
         self.login_error_label = tk.Label(self.login_frame, text="", fg="red")
         self.login_error_label.pack(pady=5)
@@ -82,7 +90,7 @@ class ChatClient:
         if not username or not password:
             self.login_error_label.config(text="Please enter both username and password.")
             return
-        self.login_error_label.config(text="")  # Clear any previous error
+        self.login_error_label.config(text="") # Clear any previous error
         # Start a separate thread for the login conversation
         threading.Thread(target=self.login_thread, args=(username, password), daemon=True).start()
 
@@ -93,22 +101,23 @@ class ChatClient:
             self.socket.connect((HOST, PORT))
 
             # Read the initial welcome message from the server.
-            _ = self.socket.recv(1024).decode() ###
+            _ = self.socket.recv(1024).decode('utf-8')
             json_login_command = {"command": "2"}
             # Tell the server you want to login by sending "2"
-            self.socket.sendall(json.dumps(json_login_command))
+            self.socket.sendall(json.dumps(json_login_command).encode('utf-8'))
             # Wait for prompt asking for username.
-            _ = self.socket.recv(1024).decode()
+            _ = self.socket.recv(1024).decode('utf-8')
             json_login_username = {"command": "2",
                                    "username": username}
-            self.socket.sendall(json.dumps(json_login_username))
+            self.socket.sendall(json.dumps(json_login_username).encode('utf-8'))
             # Wait for the prompt for password.
-            _ = self.socket.recv(1024).decode()
+            _ = self.socket.recv(1024).decode('utf-8')
             json_login_password = {"command": "2",
                                    "password": password}
-            self.socket.sendall(json.dumps(json_login_password))
+            self.socket.sendall(json.dumps(json_login_password).encode('utf-8'))
             # Wait for the final response.
-            result = self.socket.recv(1024).decode() ###
+            result_jsonstr = self.socket.recv(1024).decode('utf-8')
+            result = json.loads(result_jsonstr)["server_message"]
             if "Welcome" in result:
                 # Successful login; switch to chat page.
                 self.root.after(0, self.show_chat_page)
@@ -144,7 +153,6 @@ class ChatClient:
         tk.Entry(self.register_frame, textvariable=self.reg_confirm_var, show="*").pack(pady=5)
 
         tk.Button(self.register_frame, text="Submit", width=10, command=self.handle_register).pack(pady=5)
-        tk.Button(self.register_frame, text="Back", width=10, command=self.show_welcome_page).pack(pady=5)
 
         self.register_error_label = tk.Label(self.register_frame, text="", fg="red")
         self.register_error_label.pack(pady=5)
@@ -173,23 +181,24 @@ class ChatClient:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-            _ = self.socket.recv(1024).decode()
+            _ = self.socket.recv(1024).decode('utf-8')
             # Send "1" to choose registration.
-            json_register_command = {"command":"1"}
-            self.socket.sendall(json.dumps(json_register_command))
-            _ = self.socket.recv(1024).decode()
-            json_register_username = {"command":"1",
-                                      "username":username}
-            self.socket.sendall(json.dumps(json_register_username))
-            _ = self.socket.recv(1024).decode()
-            json_register_password = {"command":"1",
-                                      "password":password}
-            self.socket.sendall(json.dumps(json_register_password))
-            _ = self.socket.recv(1024).decode()
-            json_register_confirm = {"command":"1",
-                                     "password":confirm}
-            self.socket.sendall(json.dumps(json_register_confirm))
-            result = self.socket.recv(1024).decode()
+            json_register_command = {"command": "1"}
+            self.socket.sendall(json.dumps(json_register_command).encode('utf-8'))
+            _ = self.socket.recv(1024).decode('utf-8')
+            json_register_username = {"command": "1",
+                                      "username": username}
+            self.socket.sendall(json.dumps(json_register_username).encode('utf-8'))
+            _ = self.socket.recv(1024).decode('utf-8')
+            json_register_password = {"command": "1",
+                                      "password": password}
+            self.socket.sendall(json.dumps(json_register_password).encode('utf-8'))
+            _ = self.socket.recv(1024).decode('utf-8')
+            json_register_confirm = {"command": "1",
+                                     "password": confirm}
+            self.socket.sendall(json.dumps(json_register_confirm).encode('utf-8'))
+            result_jsonstr = self.socket.recv(1024).decode('utf-8')
+            result = json.loads(result_jsonstr)["server_message"]
             if "successful" in result:
                 self.root.after(0, self.show_chat_page)
                 self.receive_queue.put(result)
@@ -232,13 +241,13 @@ class ChatClient:
 
     def send_message(self, event=None):
         message = self.message_entry.get().strip()
-        json_message = {"command": "send_message",
+        json_message = {"command": "sendmessage",
                         "message": message}
         if message:
             # Display the message as sent-by-me (right aligned)
             self.append_message(message, sent_by_me=True)
             try:
-                self.socket.sendall(json.dumps(json_message))
+                self.socket.sendall(json.dumps(json_message).encode('utf-8'))
                 if message.lower() == "logoff":
                     # When "logoff" is typed, stop receiving, close the connection,
                     # and go back to the welcome page.
@@ -269,11 +278,12 @@ class ChatClient:
     def receive_messages(self):
         while self.running:
             try:
-                data = self.socket.recv(1024)
+                data_jsonstr = self.socket.recv(1024).decode('utf-8')
+                data = json.loads(data_jsonstr)["data"] 
                 if not data:
                     self.receive_queue.put("Server closed connection.")
                     break
-                self.receive_queue.put(data.decode())
+                self.receive_queue.put(data) ### FIX ###
             except Exception as e:
                 self.receive_queue.put("Receive error: " + str(e))
                 break
@@ -295,7 +305,7 @@ class ChatClient:
         json_logoff = {"command": "logoff"}
         try:
             if self.socket:
-                self.socket.sendall(json_logoff)
+                self.socket.sendall(json.dumps(json_logoff)).encode('utf-8')
                 self.socket.close()
         except Exception:
             pass

@@ -63,7 +63,7 @@ Ensure you have the following installed:
 There are two servers. One running with JSON and the other via a custom wire protocol. 
 -  To run the JSON version, run 
    ```sh
-   python serverJSON.py --host 10.250.185.35 --port 50000
+   python serverJson.py --host 10.250.185.35 --port 50000
      ```
 -  To run the custom wire protocol version, run 
    ```sh

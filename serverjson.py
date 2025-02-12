@@ -196,7 +196,7 @@ def handle_login(conn, user_id):
             cur.execute("UPDATE users SET active=1, socket_id=%s WHERE username=%s",
                         (str(user_id), login_username))
         db.commit()
-    json_login_welcome = {"command":"2",
+    json_login_welcome = {"command": "2",
                           "server_message": f"Welcome, {login_username}!\n",
                           "username": login_username}
     conn.sendall(json.dumps(json_login_welcome).encode('utf-8'))
