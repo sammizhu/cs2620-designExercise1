@@ -14,11 +14,8 @@ parser.add_argument("--port", type=int, default=int(os.getenv("CHAT_SERVER_PORT"
 args = parser.parse_args()
 
 # Use argument or environment variable
-# HOST = args.host
-# PORT = args.port
-
-HOST = '127.0.0.1'
-PORT = 65432
+HOST = args.host
+PORT = args.port
 
 class ChatClient:
     def __init__(self):
@@ -106,14 +103,12 @@ class ChatClient:
             # Tell the server you want to login by sending "2"
             self.socket.sendall(json.dumps(json_login_command).encode('utf-8'))
             # Wait for prompt asking for username.
-            prompt = self.socket.recv(1024).decode('utf-8') ###
-            _ = json.loads(prompt)["server_message"]
+            _ = self.socket.recv(1024).decode('utf-8')
             json_login_username = {"command": "2",
                                    "username": username}
             self.socket.sendall(json.dumps(json_login_username).encode('utf-8'))
             # Wait for the prompt for password.
-            prompt = self.socket.recv(1024).decode('utf-8')
-            _ = json.loads(prompt)["server_message"]
+            _ = self.socket.recv(1024).decode('utf-8')
             json_login_password = {"command": "2",
                                    "password": password}
             self.socket.sendall(json.dumps(json_login_password).encode('utf-8'))
@@ -186,18 +181,15 @@ class ChatClient:
             # Send "1" to choose registration.
             json_register_command = {"command": "1"}
             self.socket.sendall(json.dumps(json_register_command).encode('utf-8'))
-            prompt = self.socket.recv(1024).decode('utf-8')
-            _ = json.loads(prompt)["server_message"]
+            _ = self.socket.recv(1024).decode('utf-8')
             json_register_username = {"command": "1",
                                       "username": username}
             self.socket.sendall(json.dumps(json_register_username).encode('utf-8'))
-            prompt = self.socket.recv(1024).decode('utf-8')
-            _ = json.loads(prompt)["server_message"]
+            _ = self.socket.recv(1024).decode('utf-8')
             json_register_password = {"command": "1",
                                       "password": password}
             self.socket.sendall(json.dumps(json_register_password).encode('utf-8'))
-            prompt = self.socket.recv(1024).decode('utf-8')
-            _ = json.loads(prompt)["server_message"]
+            _ = self.socket.recv(1024).decode('utf-8')
             json_register_confirm = {"command": "1",
                                      "password": confirm}
             self.socket.sendall(json.dumps(json_register_confirm).encode('utf-8'))
@@ -245,8 +237,12 @@ class ChatClient:
 
     def send_message(self, event=None):
         message = self.message_entry.get().strip()
-        json_message = {"command": "sendmessage",
-                        "message": message}
+        # Special case: the server expects "choice" when user is typing "1" or "2"
+        if message in ("1", "2"):
+            json_message = {"choice": message}
+        else:
+            json_message = {"command": message}
+
         if message:
             # Display the message as sent-by-me (right aligned)
             self.append_message(message, sent_by_me=True)
@@ -283,11 +279,22 @@ class ChatClient:
         while self.running:
             try:
                 data_jsonstr = self.socket.recv(1024).decode('utf-8')
-                data = json.loads(data_jsonstr)["server_message"] 
-                if not data:
+                if not data_jsonstr:
                     self.receive_queue.put("Server closed connection.")
                     break
-                self.receive_queue.put(data) ### FIX ###
+
+                # PARSE FIX: Instead of looking for ["data"], check for "server_message" or "messagetext"
+                data_dict = json.loads(data_jsonstr)
+                if "server_message" in data_dict:
+                    parsed_msg = data_dict["server_message"]
+                elif "messagetext" in data_dict:
+                    parsed_msg = data_dict["messagetext"]
+                else:
+                    # Fallback to show the entire dictionary if we don't recognize keys
+                    parsed_msg = str(data_dict)
+
+                self.receive_queue.put(parsed_msg)
+
             except Exception as e:
                 self.receive_queue.put("Receive error: " + str(e))
                 break
@@ -309,7 +316,7 @@ class ChatClient:
         json_logoff = {"command": "logoff"}
         try:
             if self.socket:
-                self.socket.sendall(json.dumps(json_logoff)).encode('utf-8')
+                self.socket.sendall(json.dumps(json_logoff)).encode('utf-8')  # (Original code kept as is)
                 self.socket.close()
         except Exception:
             pass
