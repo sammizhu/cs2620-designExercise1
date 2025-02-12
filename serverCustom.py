@@ -19,6 +19,7 @@ PORT = args.port  # Use argument or environment variable
 clients = {}  
 
 def connectsql():
+    """Establishes and returns a connection to the MySQL database."""
     return pymysql.connect(
         host=HOST,
         user='root',
@@ -28,6 +29,11 @@ def connectsql():
     )
 
 def checkRealUsername(username):
+    """Checks if the given username exists in the database.
+        
+        Returns:
+            bool: True if the username exists, False otherwise.
+    """
     with connectsql() as db:
         with db.cursor() as cur:
             cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE username=%s", (username,))
@@ -35,6 +41,17 @@ def checkRealUsername(username):
             return (row['cnt'] > 0)
 
 def checkValidPassword(password):
+    """Validates if the given password meets security requirements.
+
+    Requirements:
+    - At least 7 characters long
+    - Contains at least one uppercase letter
+    - Contains at least one digit
+    - Contains at least one special character (_ @ $ # !)
+
+    Returns:
+        bool: True if the password is valid, False otherwise.
+    """
     if len(password) < 7:
         return False
     has_upper = any(c.isupper() for c in password)
@@ -43,11 +60,21 @@ def checkValidPassword(password):
     return (has_upper and has_digit and has_special)
 
 def hashPass(password):
+    """Hashes a password using bcrypt with a generated salt.
+
+    Returns:
+        str: The hashed password as a string.
+    """
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed.decode('utf-8')
 
 def checkRealPassword(username, plain_text):
+    """Verifies if the provided password matches the stored hashed password for a given username.
+
+    Returns:
+        bool: True if the password matches, False otherwise.
+    """
     with connectsql() as db:
         with db.cursor() as cur:
             cur.execute("SELECT password FROM users WHERE username=%s", (username,))
@@ -58,6 +85,17 @@ def checkRealPassword(username, plain_text):
     return bcrypt.checkpw(plain_text.encode('utf-8'), stored_hash.encode('utf-8'))
 
 def handle_registration(conn, user_id):
+    """Handles user registration process.
+    
+    Steps:
+    1. Prompt for a unique username.
+    2. Prompt for a valid password and confirmation.
+    3. Hash and store the password in the database.
+    4. Mark the user as active and store the socket ID.
+    
+    Returns:
+        str or None: The registered username if successful, None if registration fails.
+    """
     # 1) Prompt repeatedly for username until it's not taken
     while True:
         conn.sendall("Enter a username (alphanumeric): ".encode())
@@ -117,6 +155,16 @@ def handle_registration(conn, user_id):
         return None
 
 def handle_login(conn, user_id):
+    """Handles user login process.
+    
+    Steps:
+    1. Prompt for an existing username.
+    2. Verify the provided password.
+    3. Mark the user as active and store the socket ID.
+    
+    Returns:
+        str or None: The logged-in username if successful, None if login fails.
+    """
     # Prompt repeatedly for username until found
     conn.sendall("Enter your username: ".encode())
     while True:
@@ -155,11 +203,16 @@ def handle_login(conn, user_id):
     return login_username
 
 def check_messages_server_side(conn, username):
-    """
-    Checks if 'username' has unread messages.
-    If so, we ask them whether they'd like to read or send new messages.
-    If they choose read => ask from which sender, then fetch those messages, mark them read.
-    If they choose send => they can just type '@username message'.
+    """Checks for unread messages for a given user.
+    
+    If unread messages exist:
+    - Prompts the user to read or skip.
+    - If reading, allows selecting a sender to view messages.
+    - Marks messages as read in the database.
+    
+    Args:
+        conn (socket): The client connection.
+        username (str): The username of the recipient.
     """
     with connectsql() as db:
         with db.cursor() as cur:
@@ -241,6 +294,17 @@ def check_messages_server_side(conn, username):
                 conn.sendall("Invalid choice. Returning to main.\n".encode())
 
 def handle_client(conn, addr):
+    """Handles a new client connection and processes their requests.
+    
+    Steps:
+    - Prompt for login or registration.
+    - If logged in, handle message sending, checking, and user commands.
+    - Manage user logoff, search, delete message, and deactivate account requests.
+    
+    Args:
+        conn (socket): The client connection.
+        addr (tuple): The client's address.
+    """
     user_id = addr[1]
     clients[user_id] = conn
     print(f"New connection from {addr}")
@@ -410,6 +474,12 @@ def handle_client(conn, addr):
         print(f"Connection with {addr} closed.")
 
 def start_server():
+    """Starts the chat server and listens for incoming client connections.
+
+    - Binds the server to the specified host and port.
+    - Accepts new client connections.
+    - Spawns a new thread to handle each client.
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((HOST, PORT))

@@ -16,14 +16,15 @@ HOST = args.host  # Use argument or environment variable
 PORT = args.port  # Use argument or environment variable
 
 class ChatClient:
+    """UI interface configuration with various functionalities."""
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Chat Client")
-        self.socket = None  # Will hold our socket after login/registration
+        self.socket = None  
         self.receive_queue = queue.Queue()
-        self.running = False  # For the chat message receiving thread
+        self.running = False  # Chat message receiving thread
 
-        # Create the different pages as Frames
+        # Different pages as Frames
         self.welcome_frame = tk.Frame(self.root)
         self.login_frame = tk.Frame(self.root)
         self.register_frame = tk.Frame(self.root)
@@ -34,15 +35,13 @@ class ChatClient:
         self.build_register_frame()
         self.build_chat_frame()
 
-        # Start with the welcome page
         self.show_welcome_page()
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.mainloop()
 
-    # =========================
-    #   WELCOME PAGE
-    # =========================
+    # WELCOME PAGE
     def build_welcome_frame(self):
+        """Constructs the welcome screen with login and register buttons."""
         label = tk.Label(self.welcome_frame, text="Welcome to EST!\nPlease choose an option:", font=("Helvetica", 16))
         label.pack(pady=10)
         login_btn = tk.Button(self.welcome_frame, text="Login", width=15, command=self.show_login_page)
@@ -51,15 +50,15 @@ class ChatClient:
         register_btn.pack(pady=5)
 
     def show_welcome_page(self):
+        """Displays the welcome screen and hides other frames."""
         self.login_frame.pack_forget()
         self.register_frame.pack_forget()
         self.chat_frame.pack_forget()
         self.welcome_frame.pack(fill="both", expand=True)
 
-    # =========================
-    #   LOGIN PAGE
-    # =========================
+    # LOGIN PAGE
     def build_login_frame(self):
+        """Constructs the login screen with input fields for username and password."""
         label = tk.Label(self.login_frame, text="Login", font=("Helvetica", 16))
         label.pack(pady=10)
 
@@ -77,42 +76,44 @@ class ChatClient:
         self.login_error_label.pack(pady=5)
 
     def show_login_page(self):
+        """Displays the login screen and hides other frames."""
         self.welcome_frame.pack_forget()
         self.register_frame.pack_forget()
         self.login_error_label.config(text="")
         self.login_frame.pack(fill="both", expand=True)
 
     def handle_login(self):
+        """Handles user login by collecting input and initiating a login request in a separate thread."""
         username = self.login_username_var.get().strip()
         password = self.login_password_var.get().strip()
         if not username or not password:
             self.login_error_label.config(text="Please enter both username and password.")
             return
-        self.login_error_label.config(text="")  # Clear any previous error
+        self.login_error_label.config(text="")  
         # Start a separate thread for the login conversation
         threading.Thread(target=self.login_thread, args=(username, password), daemon=True).start()
 
     def login_thread(self, username, password):
+        """Handles the actual login process by communicating with the server.
+        If login is successful, switches to the chat screen.
+        If login fails, displays an error message.
+        """
         try:
-            # Create a new connection for this login attempt.
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-            # Tell the server you want to login by sending "2"
+            # Send "2" to choose registration
             self.socket.sendall("2".encode())
-            # Wait for prompt asking for username.
             _ = self.socket.recv(1024).decode()
             self.socket.sendall(username.encode())
-            # Wait for the prompt for password.
             _ = self.socket.recv(1024).decode()
             self.socket.sendall(password.encode())
-            # Wait for the final response.
             result = self.socket.recv(1024).decode()
             if "Welcome" in result:
-                # Successful login; switch to chat page.
+                # Successful login; switch to chat page
                 self.root.after(0, self.show_chat_page)
                 self.receive_queue.put(result)
             else:
-                # Login failed; show the error message.
+                # Login failed; show the error message
                 self.root.after(0, lambda: self.login_error_label.config(text=result))
                 self.socket.close()
                 self.socket = None
@@ -123,10 +124,9 @@ class ChatClient:
                 self.socket.close()
                 self.socket = None
 
-    # =========================
-    #   REGISTER PAGE
-    # =========================
+    # REGISTER PAGE
     def build_register_frame(self):
+        """Constructs the registration screen with input fields for username, password, and confirmation."""
         label = tk.Label(self.register_frame, text="Register", font=("Helvetica", 16))
         label.pack(pady=10)
 
@@ -147,12 +147,14 @@ class ChatClient:
         self.register_error_label.pack(pady=5)
 
     def show_register_page(self):
+        """Displays the registration screen and hides other frames."""
         self.welcome_frame.pack_forget()
         self.login_frame.pack_forget()
         self.register_error_label.config(text="")
         self.register_frame.pack(fill="both", expand=True)
 
     def handle_register(self):
+        """Handles user registration by collecting input and initiating a registration request in a separate thread."""
         username = self.reg_username_var.get().strip()
         password = self.reg_password_var.get().strip()
         confirm = self.reg_confirm_var.get().strip()
@@ -162,15 +164,19 @@ class ChatClient:
         if password != confirm:
             self.register_error_label.config(text="Passwords do not match.")
             return
-        self.register_error_label.config(text="")  # Clear any previous error
-        # Start a separate thread for the registration conversation.
+        self.register_error_label.config(text="")  
+        # Start a separate thread for the registration conversation
         threading.Thread(target=self.register_thread, args=(username, password, confirm), daemon=True).start()
 
     def register_thread(self, username, password, confirm):
+        """Handles the actual registration process by communicating with the server.
+        If registration is successful, switches to the chat screen.
+        If registration fails, displays an error message.
+        """
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-            # Send "1" to choose registration.
+            # Send "1" to choose registration
             self.socket.sendall("1".encode())
             _ = self.socket.recv(1024).decode()
             self.socket.sendall(username.encode())
@@ -193,17 +199,13 @@ class ChatClient:
                 self.socket.close()
                 self.socket = None
 
-    # =========================
-    #   CHAT PAGE
-    # =========================
+    # CHAT PAGE
     def build_chat_frame(self):
-        # Create a scrolled text widget for displaying messages.
+        """Constructs the chat screen with a scrolling text area for messages and an input field."""
         self.chat_display = scrolledtext.ScrolledText(self.chat_frame, state='disabled', wrap='word', width=80, height=24)
         self.chat_display.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-        # Define a tag for right-aligned (sent-by-me) messages.
         self.chat_display.tag_configure("right", justify="right")
 
-        # Create an input frame for composing messages.
         self.input_frame = tk.Frame(self.chat_frame)
         self.input_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
         self.message_entry = tk.Entry(self.input_frame, width=70)
@@ -213,6 +215,7 @@ class ChatClient:
         self.send_button.pack(side=tk.LEFT, padx=(5, 0))
 
     def show_chat_page(self):
+        """Displays the chat screen and starts receiving messages from the server."""
         self.welcome_frame.pack_forget()
         self.login_frame.pack_forget()
         self.register_frame.pack_forget()
@@ -220,15 +223,17 @@ class ChatClient:
         self.start_receiving()
 
     def send_message(self, event=None):
+        """Sends a message to the server and displays it in the chat window.
+        If the message is 'logoff', the client disconnects and returns to the welcome screen.
+        """
         message = self.message_entry.get().strip()
         if message:
-            # Display the message as sent-by-me (right aligned)
             self.append_message(message, sent_by_me=True)
             try:
                 self.socket.sendall(message.encode())
                 if message.lower() == "logoff":
                     # When "logoff" is typed, stop receiving, close the connection,
-                    # and go back to the welcome page.
+                    # and go back to the welcome page
                     self.running = False
                     self.socket.close()
                     self.socket = None
@@ -240,6 +245,9 @@ class ChatClient:
             self.message_entry.delete(0, tk.END)
 
     def append_message(self, message, sent_by_me=False):
+        """Appends a message to the chat display.
+        If `sent_by_me` is True, the message is aligned to the right.
+        """
         self.chat_display.configure(state='normal')
         if sent_by_me:
             self.chat_display.insert(tk.END, message + "\n", "right")
@@ -249,11 +257,15 @@ class ChatClient:
         self.chat_display.yview(tk.END)
 
     def start_receiving(self):
+        """Starts a separate thread to continuously receive messages from the server."""
         self.running = True
         threading.Thread(target=self.receive_messages, daemon=True).start()
         self.root.after(100, self.poll_receive_queue)
 
     def receive_messages(self):
+        """Receives messages from the server in a loop and adds them to the message queue.
+        If the connection is closed or an error occurs, stops receiving.
+        """
         while self.running:
             try:
                 data = self.socket.recv(1024)
@@ -267,6 +279,9 @@ class ChatClient:
         self.running = False
 
     def poll_receive_queue(self):
+        """Checks the receive queue for new messages and updates the chat display.
+        If the connection is lost, shows a 'Disconnected' message.
+        """
         try:
             while True:
                 msg = self.receive_queue.get_nowait()
@@ -279,6 +294,9 @@ class ChatClient:
             self.append_message("Disconnected.", sent_by_me=False)
 
     def on_close(self):
+        """Handles closing the application.
+        Sends a 'logoff' message to the server (if connected) before exiting.
+        """
         try:
             if self.socket:
                 self.socket.sendall("logoff".encode())
