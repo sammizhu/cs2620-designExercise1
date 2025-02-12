@@ -1,4 +1,5 @@
--- MySQL dump 10.13  Distrib 9.2.0, for macos14.7 (arm64)
+Terminal close -- exit!
+trib 9.2.0, for macos14.7 (arm64)
 --
 -- Host: localhost    Database: db262
 -- ------------------------------------------------------
@@ -30,7 +31,7 @@ CREATE TABLE `messages` (
   `datetime` datetime DEFAULT CURRENT_TIMESTAMP,
   `isread` tinyint(1) DEFAULT NULL,
   PRIMARY KEY (`messageid`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -39,7 +40,7 @@ CREATE TABLE `messages` (
 
 LOCK TABLES `messages` WRITE;
 /*!40000 ALTER TABLE `messages` DISABLE KEYS */;
-INSERT INTO `messages` VALUES (1,'est1','est','hi how are you?','2025-02-10 00:55:01',1),(2,'est1','est','Hi!','2025-02-10 01:07:09',0);
+INSERT INTO `messages` VALUES (4,'est1','wangzai','hi','2025-02-09 19:59:40',NULL),(8,'est1','wangzai','hi','2025-02-09 20:29:25',NULL),(9,'est1','wangzai','does work','2025-02-09 20:29:39',NULL),(10,'est1','wangzai','new message','2025-02-09 20:32:26',NULL);
 /*!40000 ALTER TABLE `messages` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -65,7 +66,6 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES ('est','$2b$12$w4HBqUR14JZxfTB/rwJMR.kEXdm0bPxUXqHkGvrH/XfoZ14SO3ghK','61035',0),('est1','$2b$12$Khawzszsjgq2GGQW.givCOas3UwzCIlB.PURl49tml53oydUbMRqK','60978',1);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -78,4 +78,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-02-10  1:09:49
+-- Dump completed on 2025-02-11  9:16:21
