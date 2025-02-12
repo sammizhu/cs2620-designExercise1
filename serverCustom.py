@@ -315,6 +315,9 @@ def handle_client(conn, addr):
                                         cur.execute(query, (msg_ids[0],))
                                         db.commit()
                                         clients[tsid].sendall(f"{username}: {message}\n".encode())
+                                else:
+                                    conn.sendall("Username does not exist.\n".encode())
+
                     except Exception:
                         traceback.print_exc()
                         conn.sendall("Error storing/sending message.\n".encode())
