@@ -4,17 +4,25 @@ import pymysql
 import pymysql.cursors
 import bcrypt
 import traceback
+import argparse
+import os
 
-HOST = '127.0.0.1'
-PORT = 65432
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Start the chat server.")
+parser.add_argument("--host", default=os.getenv("CHAT_SERVER_HOST", "0.0.0.0"), help="Server hostname or IP")
+parser.add_argument("--port", type=int, default=int(os.getenv("CHAT_SERVER_PORT", 65432)), help="Port number")
+args = parser.parse_args()
 
-clients = {}  # ephemeral_port -> conn
+HOST = args.host  # Use argument or environment variable
+PORT = args.port  # Use argument or environment variable
+
+clients = {}  
 
 def connectsql():
     return pymysql.connect(
         host=HOST,
         user='root',
-        password='',  # fill in if needed
+        password='', 
         database='db262',
         cursorclass=pymysql.cursors.DictCursor
     )
@@ -170,7 +178,7 @@ def check_messages_server_side(conn, username):
             choice = conn.recv(1024).decode().strip()
 
             if choice == "1":
-                # Let’s see from which sender(s)
+                # Check which sender(s)
                 cur.execute("SELECT sender, COUNT(*) AS num FROM messages WHERE receiver=%s AND isread=0 GROUP BY sender", (username,))
                 rows = cur.fetchall()
                 if not rows:
@@ -198,8 +206,8 @@ def check_messages_server_side(conn, username):
                     conn.sendall("No unread messages from that user.\n".encode())
                     return
 
-                # Batch size: if more than 10 messages, use batches of 5; otherwise, show all
-                batch_size = 5 if len(unread_msgs) > 10 else len(unread_msgs)
+                # Batch size: if more than 5 messages, use batches of 5; otherwise, show all
+                batch_size = 5 if len(unread_msgs) > 5 else len(unread_msgs)
 
                 conn.sendall(f"--- Unread messages from {chosen_sender} ---\n".encode())
 
@@ -240,8 +248,6 @@ def handle_client(conn, addr):
     logged_in = False
     username = None
 
-    conn.sendall("Welcome! Type '1' to register, '2' to login, or 'logoff' to exit.\n ".encode())
-
     try:
         while True:
             data = conn.recv(1024).decode().strip()
@@ -250,12 +256,9 @@ def handle_client(conn, addr):
                 print(f"Client {addr} disconnected.")
                 break
 
-            # If not logged in => only handle register, login, or logoff
+            # If not logged in => only handle register or login
             if not logged_in:
-                if data.lower() == "logoff":
-                    conn.sendall("You are not logged in. Goodbye.\n".encode())
-                    break
-                elif data == "1":
+                if data == "1":
                     new_user = handle_registration(conn, user_id)
                     if new_user:
                         username = new_user
@@ -271,12 +274,9 @@ def handle_client(conn, addr):
                         # check unread for returning user
                         check_messages_server_side(conn, username)
                         conn.sendall("To send messages, use '@username message'. You can also type 'check', 'logoff',' search', 'delete', or 'deactivate'.\n ".encode())
-                else:
-                    conn.sendall("Please type '1' to register, '2' to login, or 'logoff'.\n".encode())
             
             # If logged in => handle DM sending, check, or logoff
             else:
-                conn.sendall(" ".encode())
                 if data.lower() == "logoff":
                     # Mark user inactive
                     with connectsql() as db:
@@ -299,13 +299,10 @@ def handle_client(conn, addr):
                     try:
                         with connectsql() as db:
                             with db.cursor() as cur:
-                                cur.execute("""
-                                    INSERT INTO messages (receiver, sender, message, isread)
-                                    VALUES (%s, %s, %s, 0)
-                                """, (target_username, username, message))
+                                cur.execute("INSERT INTO messages (receiver, sender, message, isread) VALUES (%s, %s, %s, 0)", (target_username, username, message))
                                 db.commit()
 
-                                # If target online, forward
+                                # If target online, send message --> otherwise just keep it stored in messages table above
                                 cur.execute("SELECT socket_id, active FROM users WHERE username=%s", (target_username,))
                                 row = cur.fetchone()
                                 if row and row['socket_id'] and row['socket_id'].isdigit() and row['active']:
@@ -318,7 +315,6 @@ def handle_client(conn, addr):
                                         cur.execute(query, (msg_ids[0],))
                                         db.commit()
                                         clients[tsid].sendall(f"{username}: {message}\n".encode())
-
                     except Exception:
                         traceback.print_exc()
                         conn.sendall("Error storing/sending message.\n".encode())
@@ -330,7 +326,7 @@ def handle_client(conn, addr):
                             with db.cursor() as cur:
                                 cur.execute("SELECT username FROM users")
                                 rows = cur.fetchall()
-                        if rows:
+                        if len(rows) > 0:
                             all_usernames = ", ".join([row['username'] for row in rows if row['username'] != username])
                             conn.sendall(f"\nAll users:\n{all_usernames}\n ".encode())
                         else:
@@ -340,27 +336,28 @@ def handle_client(conn, addr):
                         conn.sendall("Error while searching for users.\n".encode())
                 
                 elif data.lower() == "delete":
-                    # Confirm with the user that they want to delete the last message they sent
-                    conn.sendall("Are you sure you want to delete the last message you sent? Type 'yes' or 'no':\n ".encode())
-                    confirm_resp = conn.recv(1024).decode().strip().lower()
-                    if confirm_resp == 'yes':
-                        try:
-                            with connectsql() as db:
-                                with db.cursor() as cur:
-                                    cur.execute("SELECT messageid FROM messages WHERE sender=%s ORDER BY messageid DESC LIMIT 1""", (username,))
-                                    row = cur.fetchone()
-                                    if row:
-                                        last_msg_id = row['messageid']
+                    # Check if user has sent any unread messages
+                    try:
+                        with connectsql() as db:
+                            with db.cursor() as cur:
+                                cur.execute("SELECT messageid FROM messages WHERE sender=%s AND isread=0 ORDER BY messageid DESC LIMIT 1""", (username,))
+                                row = cur.fetchone()
+                                if row:
+                                    last_msg_id = row['messageid']
+                                    # Confirm with the user that they want to delete the last message they sent
+                                    conn.sendall("Are you sure you want to delete the last message you sent? Type 'yes' or 'no':\n ".encode())
+                                    confirm_resp = conn.recv(1024).decode().strip().lower()
+                                    if confirm_resp == 'yes':
                                         cur.execute("DELETE FROM messages WHERE messageid=%s", (last_msg_id,))
                                         db.commit()
-                                        conn.sendall("Your last message has been deleted.\nNote if the recipient saw the message, it does not delete it on their end.\n ".encode())
+                                        conn.sendall("Your last message has been deleted.\n".encode())
                                     else:
-                                        conn.sendall("You have not sent any messages to delete.\n".encode())
-                        except Exception as e:
-                            traceback.print_exc()
-                            conn.sendall("Error deleting your last message.\n".encode())
-                    else:
-                        conn.sendall("Delete canceled.\n".encode())
+                                        conn.sendall("Delete canceled.\n".encode())
+                                else:
+                                    conn.sendall("You have not sent any messages able to be deleted. Note that you cannot delete messages already read.\n".encode())
+                    except Exception as e:
+                        traceback.print_exc()
+                        conn.sendall("Error deleting your last message. Please try again.\n".encode())
 
                 elif data.lower() == "deactivate":
                     # Confirm with the user that this will deactivate (delete) their account

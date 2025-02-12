@@ -3,9 +3,17 @@ from tkinter import scrolledtext, messagebox
 import threading
 import socket
 import queue
+import argparse
+import os
 
-HOST = '127.0.0.1'
-PORT = 65432
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description="Start the chat client.")
+parser.add_argument("--host", default=os.getenv("CHAT_SERVER_HOST", "127.0.0.1"), help="Server hostname or IP")
+parser.add_argument("--port", type=int, default=int(os.getenv("CHAT_SERVER_PORT", 65432)), help="Port number")
+args = parser.parse_args()
+
+HOST = args.host  # Use argument or environment variable
+PORT = args.port  # Use argument or environment variable
 
 class ChatClient:
     def __init__(self):
@@ -64,7 +72,6 @@ class ChatClient:
         tk.Entry(self.login_frame, textvariable=self.login_password_var, show="*").pack(pady=5)
 
         tk.Button(self.login_frame, text="Submit", width=10, command=self.handle_login).pack(pady=5)
-        tk.Button(self.login_frame, text="Back", width=10, command=self.show_welcome_page).pack(pady=5)
 
         self.login_error_label = tk.Label(self.login_frame, text="", fg="red")
         self.login_error_label.pack(pady=5)
@@ -90,8 +97,6 @@ class ChatClient:
             # Create a new connection for this login attempt.
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-            # Read the initial welcome message from the server.
-            _ = self.socket.recv(1024).decode()
             # Tell the server you want to login by sending "2"
             self.socket.sendall("2".encode())
             # Wait for prompt asking for username.
@@ -137,7 +142,6 @@ class ChatClient:
         tk.Entry(self.register_frame, textvariable=self.reg_confirm_var, show="*").pack(pady=5)
 
         tk.Button(self.register_frame, text="Submit", width=10, command=self.handle_register).pack(pady=5)
-        tk.Button(self.register_frame, text="Back", width=10, command=self.show_welcome_page).pack(pady=5)
 
         self.register_error_label = tk.Label(self.register_frame, text="", fg="red")
         self.register_error_label.pack(pady=5)
@@ -166,7 +170,6 @@ class ChatClient:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-            _ = self.socket.recv(1024).decode()
             # Send "1" to choose registration.
             self.socket.sendall("1".encode())
             _ = self.socket.recv(1024).decode()
