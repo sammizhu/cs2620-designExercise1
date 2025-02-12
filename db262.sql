@@ -1,5 +1,3 @@
-Terminal close -- exit!
-trib 9.2.0, for macos14.7 (arm64)
 --
 -- Host: localhost    Database: db262
 -- ------------------------------------------------------

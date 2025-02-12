@@ -118,8 +118,8 @@ def handle_registration(conn, user_id):
 
 def handle_login(conn, user_id):
     # Prompt repeatedly for username until found
+    conn.sendall("Enter your username: ".encode())
     while True:
-        conn.sendall("Enter your username: ".encode())
         login_username = conn.recv(1024).decode().strip()
 
         if not login_username:
@@ -326,7 +326,7 @@ def handle_client(conn, addr):
                             with db.cursor() as cur:
                                 cur.execute("SELECT username FROM users")
                                 rows = cur.fetchall()
-                        if len(rows) > 0:
+                        if len(rows) > 1:
                             all_usernames = ", ".join([row['username'] for row in rows if row['username'] != username])
                             conn.sendall(f"\nAll users:\n{all_usernames}\n ".encode())
                         else:
