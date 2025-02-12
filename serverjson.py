@@ -18,6 +18,9 @@ args = parser.parse_args()
 HOST = args.host
 PORT = args.port
 
+# HOST = '127.0.0.1'
+# PORT = 65432
+
 clients = {}
 
 def connectsql():
