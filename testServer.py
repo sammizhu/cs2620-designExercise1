@@ -1,4 +1,8 @@
-# testServer.py
+"""
+Usage:
+  coverage run --source=serverCustom testServer.py
+  coverage report -m
+"""
 
 import unittest
 import threading
@@ -7,9 +11,8 @@ import time
 from unittest.mock import patch, MagicMock
 import pymysql
 import pymysql.cursors
-import datetime  # for returning a datetime object in mock
+import datetime
 
-# Import the functions/classes from your custom server module
 from serverCustom import (
     connectsql,
     checkRealUsername,
@@ -23,25 +26,17 @@ from serverCustom import (
     start_server
 )
 
-###############################################################################
-#                         DATABASE FUNCTION TESTS                             #
-###############################################################################
 class TestServerDatabaseFunctions(unittest.TestCase):
     """
-    Pure 'unit-level' tests and 'regression' tests for DB-related functions:
-    - connectsql
-    - checkRealUsername
-    - checkValidPassword
-    - hashPass
-    - checkRealPassword
+    This test class covers database-related functions such as connectsql,
+    checkRealUsername, checkValidPassword, hashPass, and checkRealPassword.
     """
 
-    ### ---------- connectsql Tests ---------- ###
     @patch('serverCustom.pymysql.connect')
     def test_connectsql_unit(self, mock_connect):
         """
-        Unit test for connectsql() ensuring it calls pymysql.connect
-        with expected params. We do not actually connect to a real DB here.
+        Unit test: Verifies connectsql() calls pymysql.connect with the correct parameters 
+        and returns the mock connection object.
         """
         mock_connection = MagicMock()
         mock_connect.return_value = mock_connection
@@ -58,18 +53,18 @@ class TestServerDatabaseFunctions(unittest.TestCase):
 
     def test_connectsql_regression(self):
         """
-        Suppose we once had a bug where we used the wrong DB name.
-        Now ensure we connect to 'db262'.
+        Regression test: Ensures the 'connectsql' function uses the correct default database name ('db262').
         """
         with patch('serverCustom.pymysql.connect') as mock_connect:
             connectsql()
             _, kwargs = mock_connect.call_args
             self.assertEqual(kwargs.get('database'), 'db262')
 
-    @unittest.skip("Integration test requires a live DB and proper credentials.")
+    @unittest.skip("Integration test requires a live DB.")
     def test_connectsql_integration(self):
         """
-        Integration test example: actually connect to a test DB environment.
+        Integration test: Attempts to connect to a real DB and run a trivial query (SELECT 1).
+        Requires an actual DB connection.
         """
         conn = connectsql()
         try:
@@ -80,117 +75,109 @@ class TestServerDatabaseFunctions(unittest.TestCase):
         finally:
             conn.close()
 
-    ### ---------- checkRealUsername Tests ---------- ###
     @patch('serverCustom.connectsql')
     def test_checkRealUsername_unit(self, mock_connectsql):
+        """
+        Unit test: Mocks DB calls for checkRealUsername() to verify that the function 
+        returns True/False based on the 'cnt' field from the DB.
+        """
         mock_db = MagicMock()
         mock_cursor = MagicMock()
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # Suppose the user 'alice' does exist
         mock_cursor.fetchone.return_value = {'cnt': 1}
         self.assertTrue(checkRealUsername('alice'))
 
-        # Suppose the user 'bob' does NOT exist
         mock_cursor.fetchone.return_value = {'cnt': 0}
         self.assertFalse(checkRealUsername('bob'))
 
     def test_checkRealUsername_regression(self):
         """
-        We had a bug if DB returns None -> function used to crash.
-        Now we confirm it doesn't crash (should return False).
+        Regression test: Ensures checkRealUsername() does not crash when DB returns None.
         """
         with patch('serverCustom.connectsql') as mock_connectsql:
             mock_db = MagicMock()
             mock_cursor = MagicMock()
             mock_connectsql.return_value.__enter__.return_value = mock_db
             mock_db.cursor.return_value.__enter__.return_value = mock_cursor
-
-            # Return None to simulate a weird DB response
             mock_cursor.fetchone.return_value = None
-
             try:
                 result = checkRealUsername('bogususer')
-                # We expect it to return False gracefully
-                self.assertFalse(result, "Should return False if row is None.")
+                self.assertFalse(result)
             except Exception as e:
-                self.fail(f"Regression bug: checkRealUsername crashed with exception {e}")
+                self.fail(f"Regression bug: checkRealUsername crashed with {e}")
 
-    @unittest.skip("Integration test requires a live DB with known data.")
+    @unittest.skip("Integration test requires a live DB.")
     def test_checkRealUsername_integration(self):
-        result = checkRealUsername('test_user')  # Known test user
-        self.assertTrue(result)
+        """
+        Integration test: Attempts checkRealUsername against a known user in the real DB.
+        """
+        self.assertTrue(checkRealUsername('test_user'))
 
-    ### ---------- checkValidPassword Tests ---------- ###
     def test_checkValidPassword_unit(self):
-        self.assertFalse(checkValidPassword("Ab1!"), "Too short")
-        self.assertFalse(checkValidPassword("abc123!"), "No uppercase")
-        self.assertFalse(checkValidPassword("Abcdef!"), "No digit")
-        self.assertFalse(checkValidPassword("Abcdef1"), "No special char")
-        self.assertTrue(checkValidPassword("Abc123!"), "Valid")
+        """
+        Unit test: Checks various valid and invalid passwords to confirm
+        checkValidPassword() enforces length, uppercase, lowercase, number, and symbol.
+        """
+        self.assertFalse(checkValidPassword("Ab1!"))
+        self.assertFalse(checkValidPassword("abc123!"))
+        self.assertFalse(checkValidPassword("Abcdef!"))
+        self.assertFalse(checkValidPassword("Abcdef1"))
+        self.assertTrue(checkValidPassword("Abc123!"))
 
     def test_checkValidPassword_regression(self):
         """
-        Suppose previously special char logic allowed '%', 
-        now ensure it fails if password uses '%'.
+        Regression test: Ensures a specific pattern ('Abc123%') is still flagged as invalid,
+        presumably due to special symbol requirements or other constraints.
         """
         self.assertFalse(checkValidPassword("Abc123%"))
 
-    ### ---------- hashPass / checkRealPassword Tests ---------- ###
     def test_hashPass_unit(self):
+        """
+        Unit test: Verifies hashPass() returns a bcrypt hash string.
+        """
         pwd = "Abc123!"
         hashed = hashPass(pwd)
         self.assertIsInstance(hashed, str)
         self.assertTrue(
-            hashed.startswith("$2b$") or hashed.startswith("$2a$"),
-            "Expected bcrypt hash to start with $2b$ or $2a$"
+            hashed.startswith("$2b$") or hashed.startswith("$2a$")
         )
 
     @patch('serverCustom.connectsql')
     def test_checkRealPassword_unit(self, mock_connectsql):
         """
-        Mocks DB calls to verify logic for checkRealPassword.
+        Unit test: Mocks DB to verify checkRealPassword() returns True when 
+        provided with the correct plaintext password matching a stored hash.
         """
         mock_db = MagicMock()
         mock_cursor = MagicMock()
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # Suppose DB returns a hashed version of "Abc123!"
         test_hash = hashPass("Abc123!")
         mock_cursor.fetchone.return_value = {'password': test_hash}
-
-        # correct password
         self.assertTrue(checkRealPassword("testuser", "Abc123!"))
-        # incorrect password
         self.assertFalse(checkRealPassword("testuser", "wrongPass1!"))
 
 
-###############################################################################
-#                          HIGHER-LEVEL FUNCTION TESTS                        #
-###############################################################################
 class TestServerHighLevelFunctions(unittest.TestCase):
     """
-    Tests for higher-level server functions that handle logic with 
-    sockets and DB interactions: 
-    - handle_registration
-    - handle_login
-    - check_messages_server_side
+    This test class covers higher-level server functions like handle_registration and handle_login.
+    It uses mocking to simulate client input/output and DB operations.
     """
 
-    ### ---------- handle_registration Tests ---------- ###
     @patch('serverCustom.connectsql')
     def test_handle_registration_unit(self, mock_connectsql):
         """
-        Test handle_registration by mocking socket input & DB calls.
-        Scenario: new user "alice" -> valid pass -> success.
+        Unit test: Verifies handle_registration() logic when the username is new, 
+        and passwords match, leading to a successful registration.
         """
         mock_conn = MagicMock()
         mock_conn.recv.side_effect = [
-            b"alice",      # username
-            b"Abc123!",    # password
-            b"Abc123!",    # confirm
+            b"alice",
+            b"Abc123!",
+            b"Abc123!"
         ]
 
         mock_db = MagicMock()
@@ -198,31 +185,25 @@ class TestServerHighLevelFunctions(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # 'alice' does NOT exist
-        mock_cursor.fetchone.side_effect = [
-            {"cnt": 0}  # checkRealUsername => not found
-        ]
+        mock_cursor.fetchone.return_value = {"cnt": 0}
 
         result = handle_registration(mock_conn, user_id=123)
-        self.assertEqual(result, "alice", "Expected to register 'alice' successfully.")
+        self.assertEqual(result, "alice")
 
-        # Check we see success message
         sendall_calls = mock_conn.sendall.call_args_list
         self.assertTrue(any(b"Registration successful" in call[0][0] for call in sendall_calls))
 
     @patch('serverCustom.connectsql')
     def test_handle_registration_regression(self, mock_connectsql):
         """
-        Suppose we had a bug that if the DB insert fails, 
-        the function used to crash or hang. 
-        Now we confirm handle_registration() returns None and 
-        sends 'Server error. Registration canceled.' instead.
+        Regression test: Checks handle_registration() properly handles DB insertion errors 
+        and sends "Server error. Registration canceled." to the client.
         """
         mock_conn = MagicMock()
         mock_conn.recv.side_effect = [
-            b"bob",         # username
-            b"Abc123!",     # password
-            b"Abc123!",     # confirm
+            b"bob",
+            b"Abc123!",
+            b"Abc123!"
         ]
 
         mock_db = MagicMock()
@@ -230,48 +211,41 @@ class TestServerHighLevelFunctions(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # 'bob' does NOT exist => checkRealUsername => {'cnt': 0}
-        # Then we'll raise on "INSERT" queries but not on SELECT queries.
         def db_side_effect(sql, params):
             if sql.startswith("SELECT COUNT(*)"):
-                # This is the checkRealUsername query => do nothing
                 return
             elif sql.startswith("INSERT INTO users"):
                 raise Exception("DB insertion error!")
+
         mock_cursor.fetchone.return_value = {"cnt": 0}
         mock_cursor.execute.side_effect = db_side_effect
 
         result = handle_registration(mock_conn, user_id=123)
-        self.assertIsNone(result, "Should return None if DB insert fails.")
+        self.assertIsNone(result)
 
-        # Check the server error message was sent
         sendall_calls = mock_conn.sendall.call_args_list
         msgs = [call[0][0] for call in sendall_calls]
         self.assertTrue(
-            any(b"Server error. Registration canceled." in msg for msg in msgs),
-            "Expected 'Server error. Registration canceled.' in output"
+            any(b"Server error. Registration canceled." in msg for msg in msgs)
         )
 
     @unittest.skip("Integration test would require a real server & DB.")
     def test_handle_registration_integration(self):
         """
-        Example: connect to a real running server,
-        send data for registration, and see if user is created in DB.
+        Integration test: Would verify registration logic end-to-end against a real database.
         """
         pass
 
-    ### ---------- handle_login Tests ---------- ###
     @patch('serverCustom.connectsql')
     def test_handle_login_unit(self, mock_connectsql):
         """
-        Mock the DB so user 'charlie' exists with password 'Abc123!'.
-        Then feed that data to handle_login via a mock socket.
-        Check that we get a success message and return the username.
+        Unit test: Simulates a client providing a valid username/password. 
+        Expects 'Welcome, charlie!' after successful login.
         """
         mock_conn = MagicMock()
         mock_conn.recv.side_effect = [
-            b"charlie",  # username
-            b"Abc123!"   # password
+            b"charlie",
+            b"Abc123!"
         ]
 
         mock_db = MagicMock()
@@ -279,10 +253,9 @@ class TestServerHighLevelFunctions(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # 'charlie' is found in DB
         mock_cursor.fetchone.side_effect = [
-            {"cnt": 1},                     # checkRealUsername => found
-            {"password": hashPass("Abc123!")}  # checkRealPassword => matches
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")}
         ]
 
         result = handle_login(mock_conn, user_id=999)
@@ -294,14 +267,13 @@ class TestServerHighLevelFunctions(unittest.TestCase):
     @patch('serverCustom.connectsql')
     def test_handle_login_regression(self, mock_connectsql):
         """
-        Suppose we had a bug if user typed an empty password 
-        or the DB returned None. Check we handle it gracefully.
+        Regression test: If the client provides an empty password, 
+        handle_login() should cancel the login and return None.
         """
         mock_conn = MagicMock()
-        # user typed a real username but then typed no password (empty)
         mock_conn.recv.side_effect = [
-            b"charlie",  # username
-            b""          # empty => user canceled
+            b"charlie",
+            b""
         ]
 
         mock_db = MagicMock()
@@ -309,7 +281,6 @@ class TestServerHighLevelFunctions(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # 'charlie' is found in DB
         mock_cursor.fetchone.return_value = {"cnt": 1}
 
         result = handle_login(mock_conn, user_id=123)
@@ -319,17 +290,19 @@ class TestServerHighLevelFunctions(unittest.TestCase):
 
     @unittest.skip("Integration test would require a live server & DB.")
     def test_handle_login_integration(self):
+        """
+        Integration test: Would check handle_login() logic end-to-end against a real DB and client.
+        """
         pass
 
-    ### ---------- check_messages_server_side Tests ---------- ###
     @patch('serverCustom.connectsql')
     def test_check_messages_server_side_unit_zero_unread(self, mock_connectsql):
         """
-        Mock a scenario of 0 unread messages, 
-        ensure it just sends "You have 0 unread messages."
+        Unit test: Simulates a user with 0 unread messages. 
+        Ensures the server replies 'You have 0 unread messages.' 
         """
         mock_conn = MagicMock()
-        mock_conn.recv.return_value = b""  # no further input
+        mock_conn.recv.return_value = b""
 
         mock_db = MagicMock()
         mock_cursor = MagicMock()
@@ -338,22 +311,21 @@ class TestServerHighLevelFunctions(unittest.TestCase):
 
         mock_cursor.fetchone.return_value = {"cnt": 0}
 
-        check_messages_server_side(mock_conn, username="david")
+        check_messages_server_side(mock_conn, "david")
         sendall_calls = mock_conn.sendall.call_args_list
-        self.assertTrue(any(b"You have 0 unread messages." in call[0][0] for call in sendall_calls))
+        self.assertTrue(any(b"You have 0 unread messages." in c[0][0] for c in sendall_calls))
 
     @patch('serverCustom.connectsql')
     def test_check_messages_server_side_unit_unread_flow(self, mock_connectsql):
         """
-        Mock scenario with unread messages. 
-        We'll simulate user pressing '1' to read, then choosing a sender.
-        Then we test the batch read logic, etc.
+        Unit test: Mocks a scenario where the user has 2 unread messages from alice. 
+        We then simulate reading them and check the server sends the correct messages.
         """
         mock_conn = MagicMock()
         mock_conn.recv.side_effect = [
-            b"1",        # user chooses to read
-            b"alice",    # chosen sender
-            b"",         # if there's a prompt for next batch, user hits Enter
+            b"1",  # read
+            b"alice",
+            b""    # after reading batch
         ]
 
         mock_db = MagicMock()
@@ -361,19 +333,13 @@ class TestServerHighLevelFunctions(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # unread_count = 2
         mock_cursor.fetchone.side_effect = [
-            {"cnt": 2},  # # of unread messages
+            {"cnt": 2},  # unread
         ]
 
-        # The first fetchall() is for listing senders
-        mock_cursor.fetchall.return_value = [
-            {"sender": "alice", "num": 2}
-        ]
+        mock_cursor.fetchall.return_value = [{"sender": "alice", "num": 2}]
 
-        # Then, next time we call fetchall() for the actual messages
         def fetchall_side_effect():
-            # Return a list of 2 messages with a real datetime object
             now = datetime.datetime.now()
             return [
                 {
@@ -390,87 +356,58 @@ class TestServerHighLevelFunctions(unittest.TestCase):
                 },
             ]
         mock_cursor.fetchall.side_effect = [
-            mock_cursor.fetchall.return_value,  # for senders
-            fetchall_side_effect(),             # for the actual messages
+            mock_cursor.fetchall.return_value,
+            fetchall_side_effect()
         ]
 
-        check_messages_server_side(mock_conn, username="david")
-
+        check_messages_server_side(mock_conn, "david")
         sendall_calls = mock_conn.sendall.call_args_list
-        sent_texts = [call[0][0] for call in sendall_calls]
+        txts = [call[0][0] for call in sendall_calls]
 
-        # Check for "You have 2 unread messages."
-        self.assertTrue(
-            any(b"You have 2 unread messages." in txt for txt in sent_texts),
-            "Should mention 2 unread messages"
-        )
-        # Check for the text about reading from 'alice'
-        self.assertTrue(
-            any(b"alice (2 messages)" in txt for txt in sent_texts),
-            "Should show 'alice (2 messages)'"
-        )
-        # Check the messages themselves
-        self.assertTrue(
-            any(b"Hi there!" in txt for txt in sent_texts),
-            "Should see 'Hi there!' in output"
-        )
-        self.assertTrue(
-            any(b"Are you there?" in txt for txt in sent_texts),
-            "Should see 'Are you there?' in output"
-        )
+        self.assertTrue(any(b"You have 2 unread messages." in t for t in txts))
+        self.assertTrue(any(b"alice (2 messages)" in t for t in txts))
+        self.assertTrue(any(b"Hi there!" in t for t in txts))
+        self.assertTrue(any(b"Are you there?" in t for t in txts))
 
     def test_check_messages_server_side_regression(self):
         """
-        Suppose previously if 'cur.fetchall()' returned None or 
-        we had no rows, it might crash. We'll quickly mock that scenario.
+        Regression test: Ensures check_messages_server_side does not crash if fetchall() returns None. 
         """
         with patch('serverCustom.connectsql') as mock_connectsql:
             mock_conn = MagicMock()
-            mock_conn.recv.return_value = b"1"  # user tries to read
-
+            mock_conn.recv.return_value = b"1"
             mock_db = MagicMock()
             mock_cursor = MagicMock()
             mock_connectsql.return_value.__enter__.return_value = mock_db
             mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-            # Suppose user has some unread_count = 2
             mock_cursor.fetchone.return_value = {"cnt": 2}
-            # Next step is listing senders => return None or empty
-            mock_cursor.fetchall.return_value = None  # or []
-
+            mock_cursor.fetchall.return_value = None
             try:
                 check_messages_server_side(mock_conn, "alex")
             except Exception as e:
-                self.fail(f"Regression: check_messages_server_side crashed with exception {e}")
+                self.fail(f"Regression: crashed with {e}")
 
 
-###############################################################################
-#                             handle_client TESTS                             #
-###############################################################################
 class TestHandleClient(unittest.TestCase):
     """
-    Unit, regression, and optional integration tests for handle_client.
-    handle_client is a loop that processes user commands until logoff or disconnect.
+    Tests for handle_client, which manages the main command loop for a connected user, 
+    including registration, login, direct messages, 'check', 'search', 'delete', 'deactivate', etc.
     """
 
     @patch('serverCustom.connectsql')
     def test_handle_client_unit_registration_flow(self, mock_connectsql):
         """
-        Simulate a user who chooses "1" => register => successful => then empty read => disconnect.
+        Unit test: Simulates choosing option '1' (registration) with matching passwords, 
+        then disconnecting. Expects a success message.
         """
         mock_conn = MagicMock()
-        # This sequence:
-        # 1) user sends "1" => handle_client sees we do registration
-        # 2) user sends "alice" => username
-        # 3) user sends "Abc123!" => password
-        # 4) user sends "Abc123!" => confirm password
-        # 5) user sends b"" => means client disconnected
         mock_conn.recv.side_effect = [
-            b"1",
+            b"1",        # register
             b"alice",
             b"Abc123!",
             b"Abc123!",
-            b""  # end => client disconnected
+            b""          # disconnect
         ]
         mock_addr = ("127.0.0.1", 12345)
 
@@ -479,35 +416,24 @@ class TestHandleClient(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # 'alice' does NOT exist
-        mock_cursor.fetchone.return_value = {"cnt": 0}
-
-        # Run handle_client in the same thread for test
+        mock_cursor.fetchone.return_value = {"cnt": 0}  # 'alice' doesn't exist
         handle_client(mock_conn, mock_addr)
 
-        sendall_calls = mock_conn.sendall.call_args_list
-        raw_msgs = [call[0][0] for call in sendall_calls]
-
-        # Check that we eventually see "Registration successful"
-        self.assertTrue(any(b"Registration successful" in m for m in raw_msgs),
-                        "Expected 'Registration successful' in output for registration flow")
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"Registration successful" in m for m in raw_msgs))
 
     @patch('serverCustom.connectsql')
     def test_handle_client_unit_login_flow(self, mock_connectsql):
         """
-        Simulate a user who chooses "2" => login => success => then empty read => disconnect.
+        Unit test: Simulates choosing option '2' (login) with correct username/password, 
+        then logging off. Expects a welcome message and final logoff.
         """
         mock_conn = MagicMock()
-        # side effect steps:
-        # 1) "2" => user wants to login
-        # 2) "charlie" => username
-        # 3) "Abc123!" => password
-        # 4) b"" => disconnect
         mock_conn.recv.side_effect = [
-            b"2",
+            b"2",          # login
             b"charlie",
             b"Abc123!",
-            b""
+            b""            # disconnect
         ]
         mock_addr = ("127.0.0.1", 23456)
 
@@ -516,36 +442,29 @@ class TestHandleClient(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # For checkRealUsername
-        #  - username => found => 'cnt': 1
-        # For checkRealPassword => row['password']
-        #  - we store a hashed version
         mock_cursor.fetchone.side_effect = [
-            {"cnt": 1},  # checkRealUsername => found
-            {"password": hashPass("Abc123!")}  # checkRealPassword => matches
+            {"cnt": 1},  # charlie found
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0}   # no unread messages (check_messages_server_side call)
         ]
-
         handle_client(mock_conn, mock_addr)
 
-        sendall_calls = mock_conn.sendall.call_args_list
-        raw_msgs = [call[0][0] for call in sendall_calls]
-
-        # We expect "Welcome, charlie!" to appear
-        self.assertTrue(any(b"Welcome, charlie!" in m for m in raw_msgs),
-                        "Expected 'Welcome, charlie!' after login")
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"Welcome, charlie!" in m for m in raw_msgs))
 
     @patch('serverCustom.connectsql')
     def test_handle_client_unit_logoff_flow(self, mock_connectsql):
         """
-        Simulate a user who logs in then types "logoff".
+        Unit test: After logging in, the user issues 'logoff'. 
+        Verifies the server sends a logoff message back.
         """
         mock_conn = MagicMock()
         mock_conn.recv.side_effect = [
-            b"2",          # choose login
-            b"alex",       # username
-            b"Abc123!",    # password
-            b"logoff",     # user logs off
-            b""            # then empty => disconnect
+            b"2",
+            b"alex",
+            b"Abc123!",
+            b"logoff",
+            b""
         ]
         mock_addr = ("127.0.0.1", 34567)
 
@@ -554,39 +473,23 @@ class TestHandleClient(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # Provide THREE results:
-        # 1) checkRealUsername => {"cnt": 1} => user found
-        # 2) checkRealPassword => {"password": <hashed>} => password matches
-        # 3) check_messages_server_side => {"cnt": 0} => zero unread
         mock_cursor.fetchone.side_effect = [
-            {"cnt": 1},  
-            {"password": hashPass("Abc123!")},  
-            {"cnt": 0}  
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0}  # no unread 
         ]
-
         handle_client(mock_conn, mock_addr)
 
-        sendall_calls = mock_conn.sendall.call_args_list
-        raw_msgs = [call[0][0] for call in sendall_calls]
-
-        # Now that no exception occurs, the code should reach "Logged off." 
-        self.assertTrue(
-            any(b"Logged off." in m for m in raw_msgs),
-            "Expected 'Logged off.' after user typed logoff"
-        )
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"Logged off." in m for m in raw_msgs))
 
     @patch('serverCustom.connectsql')
     def test_handle_client_regression_unknown_command(self, mock_connectsql):
         """
-        Suppose we had a bug if user typed an unknown command BEFORE login,
-        or typed random data after login. The code might crash or skip.
-        We'll confirm it handles gracefully with an error message.
+        Regression test: If user sends a command that is not '1', '2', or recognized subcommands, 
+        the server should not crash.
         """
         mock_conn = MagicMock()
-        # user typed "garbage" -> not 1 or 2 => handle_client does nothing while not logged in
-        # then user typed "logoff" => but we are not logged in => 
-        # The code won't log off but let's see how it behaves
-        # Then b"" => disconnect
         mock_conn.recv.side_effect = [
             b"garbage",
             b"logoff",
@@ -599,56 +502,300 @@ class TestHandleClient(unittest.TestCase):
         mock_connectsql.return_value.__enter__.return_value = mock_db
         mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
-        # We'll let handle_client do its thing
         handle_client(mock_conn, mock_addr)
 
-        sendall_calls = mock_conn.sendall.call_args_list
-        raw_msgs = [call[0][0] for call in sendall_calls]
+        # Just ensuring no crash
+        self.assertTrue(True)
 
-        # We expect an error or no effect. By default, your code only checks "1" or "2" if not logged in.
-        # Let's check if it just ignores or sends something like "Error: Messages must start with..."
-        # Actually your code doesn't do anything for unknown input if not logged_in. So we might check logs or see nothing.
-        # Possibly the loop just continues. But user typed 'logoff' while not logged in => code says do nothing?
-        # Then user typed b"" => disconnected => end.
+    @patch('serverCustom.connectsql')
+    def test_handle_client_unit_send_message_success(self, mock_connectsql):
+        """
+        Unit test: After login, user sends '@bob Hello Bob!'. If 'bob' is active, 
+        the message is inserted, delivered, and user eventually logs off.
+        """
+        mock_conn = MagicMock()
+        mock_conn.recv.side_effect = [
+            b"2",                # login
+            b"alice",           # user
+            b"Abc123!",         # pass
+            b"@bob Hello Bob!", # DM
+            b"logoff",          # done
+            b""                 # disconnect
+        ]
+        mock_addr = ("127.0.0.1", 9999)
 
-        # Let's see if there's any output at all. Possibly there's none or just "client disconnected."
-        # We'll just confirm the code didn't crash. If you want a specific message, you'd have to adapt your code.
-        self.assertTrue(True, "handle_client didn't crash with unknown commands before login. Good.")
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connectsql.return_value.__enter__.return_value = mock_db
+        mock_db.cursor.return_value.__enter__.return_value = mock_cursor
 
+        mock_cursor.fetchone.side_effect = [
+            {"cnt": 1},  # alice found
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0},  # no unread
+            {"socket_id": "1111", "active": 1}
+        ]
+        mock_cursor.fetchall.return_value = [ {"messageid": 1} ]
 
-    @unittest.skip("Integration test might create real socket client to test handle_client. Not implemented here.")
+        with patch('serverCustom.clients', {1111: MagicMock()}):
+            handle_client(mock_conn, mock_addr)
+
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertFalse(any(b"Username does not exist." in m for m in raw_msgs),
+                         "We expected a successful DM, not 'Username does not exist.'")
+        self.assertTrue(any(b"Logged off." in m for m in raw_msgs),
+                        "Eventually user typed 'logoff'")
+
+    @patch('serverCustom.connectsql')
+    def test_handle_client_unit_send_message_no_user(self, mock_connectsql):
+        """
+        Unit test: After login, user sends '@bob Hello?' but 'bob' doesn't exist. 
+        Should see 'Username does not exist.' in server output.
+        """
+        mock_conn = MagicMock()
+        mock_conn.recv.side_effect = [
+            b"2",                # login
+            b"alice",
+            b"Abc123!",
+            b"@bob Hello?",
+            b"logoff",
+            b""
+        ]
+        mock_addr = ("127.0.0.1", 8888)
+
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connectsql.return_value.__enter__.return_value = mock_db
+        mock_db.cursor.return_value.__enter__.return_value = mock_cursor
+
+        mock_cursor.fetchone.side_effect = [
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0},
+            None
+        ]
+
+        handle_client(mock_conn, mock_addr)
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"Username does not exist." in m for m in raw_msgs))
+
+    @patch('serverCustom.connectsql')
+    def test_handle_client_unit_check_command(self, mock_connectsql):
+        """
+        Unit test: After login, user types 'check' to see unread messages.
+        We mock 1 unread message from 'alice' to confirm server output.
+        """
+        mock_conn = MagicMock()
+        mock_conn.recv.side_effect = [
+            b"2",
+            b"alex",
+            b"Abc123!",
+            b"check",
+            b"logoff",
+            b""
+        ]
+        mock_addr = ("127.0.0.1", 11111)
+
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connectsql.return_value.__enter__.return_value = mock_db
+        mock_db.cursor.return_value.__enter__.return_value = mock_cursor
+
+        mock_cursor.fetchone.side_effect = [
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")},
+            {"cnt": 1}
+        ]
+        mock_cursor.fetchall.return_value = [
+            {"sender": "alice", "num": 1}
+        ]
+        def fetchall_side_effect():
+            now = datetime.datetime.now()
+            return [
+                {
+                    "messageid": 10,
+                    "sender": "alice",
+                    "message": "Hi from alice!",
+                    "datetime": now
+                }
+            ]
+        mock_cursor.fetchall.side_effect = [
+            mock_cursor.fetchall.return_value,
+            fetchall_side_effect()
+        ]
+
+        handle_client(mock_conn, mock_addr)
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"You have 1 unread messages." in m for m in raw_msgs))
+
+    @patch('serverCustom.connectsql')
+    def test_handle_client_unit_search_command(self, mock_connectsql):
+        """
+        Unit test: After login, user types 'search'. The server should retrieve a list 
+        of all users and exclude the current user from the displayed list.
+        """
+        mock_conn = MagicMock()
+        mock_conn.recv.side_effect = [
+            b"2",
+            b"alex",
+            b"Abc123!",
+            b"search",
+            b"logoff",
+            b""
+        ]
+        mock_addr = ("127.0.0.1", 22222)
+
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connectsql.return_value.__enter__.return_value = mock_db
+        mock_db.cursor.return_value.__enter__.return_value = mock_cursor
+
+        mock_cursor.fetchone.side_effect = [
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0}
+        ]
+        mock_cursor.fetchall.return_value = [
+            {"username": "alice"},
+            {"username": "alex"},
+            {"username": "bob"},
+        ]
+
+        handle_client(mock_conn, mock_addr)
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"alice, bob" in m for m in raw_msgs))
+
+    @patch('serverCustom.connectsql')
+    def test_handle_client_unit_delete_command_no_message(self, mock_connectsql):
+        """
+        Unit test: After login, user issues 'delete' but no unread messages 
+        they previously sent are found, so the server should respond accordingly.
+        """
+        mock_conn = MagicMock()
+        mock_conn.recv.side_effect = [
+            b"2",
+            b"alex",
+            b"Abc123!",
+            b"delete",
+            b"logoff",
+            b""
+        ]
+        mock_addr = ("127.0.0.1", 33333)
+
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connectsql.return_value.__enter__.return_value = mock_db
+        mock_db.cursor.return_value.__enter__.return_value = mock_cursor
+
+        mock_cursor.fetchone.side_effect = [
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0},
+            None
+        ]
+        handle_client(mock_conn, mock_addr)
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"You have not sent any messages able to be deleted." in m for m in raw_msgs))
+
+    @patch('serverCustom.connectsql')
+    def test_handle_client_unit_delete_command_success(self, mock_connectsql):
+        """
+        Unit test: If user has an unread message they sent, and they confirm deletion, 
+        the server should delete it and report success.
+        """
+        mock_conn = MagicMock()
+        mock_conn.recv.side_effect = [
+            b"2",
+            b"alex",
+            b"Abc123!",
+            b"delete",
+            b"yes",
+            b"logoff",
+            b""
+        ]
+        mock_addr = ("127.0.0.1", 44444)
+
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connectsql.return_value.__enter__.return_value = mock_db
+        mock_db.cursor.return_value.__enter__.return_value = mock_cursor
+
+        mock_cursor.fetchone.side_effect = [
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0},
+            {"messageid": 99}
+        ]
+        handle_client(mock_conn, mock_addr)
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"Your last message has been deleted." in m for m in raw_msgs))
+
+    @patch('serverCustom.connectsql')
+    def test_handle_client_unit_deactivate_command_success(self, mock_connectsql):
+        """
+        Unit test: After issuing 'deactivate' and confirming 'yes', 
+        the server removes the user's account and messages.
+        """
+        mock_conn = MagicMock()
+        mock_conn.recv.side_effect = [
+            b"2",
+            b"alex",
+            b"Abc123!",
+            b"deactivate",
+            b"yes",
+            b""
+        ]
+        mock_addr = ("127.0.0.1", 55555)
+
+        mock_db = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connectsql.return_value.__enter__.return_value = mock_db
+        mock_db.cursor.return_value.__enter__.return_value = mock_cursor
+
+        mock_cursor.fetchone.side_effect = [
+            {"cnt": 1},
+            {"password": hashPass("Abc123!")},
+            {"cnt": 0}
+        ]
+        handle_client(mock_conn, mock_addr)
+
+        raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
+        self.assertTrue(any(b"Your account and all your sent messages have been removed." in m for m in raw_msgs))
+
+    @unittest.skip("Integration test might create real socket client to test handle_client.")
     def test_handle_client_integration(self):
         """
-        In a real integration test, we would connect a real socket client and 
-        actually go through a handle_client flow. The server would spawn handle_client 
-        in a new thread. Then we'd send real data and read responses.
+        Integration test: Would require an actual client connecting to the real server, 
+        sending commands, and verifying responses end-to-end.
         """
         pass
 
 
-###############################################################################
-#                         INTEGRATION TESTS (FULL SERVER)                     #
-###############################################################################
 class TestServerSocketIntegration(unittest.TestCase):
     """
-    Example real integration test. 
-    Runs start_server() in a thread, connects a real socket client.
+    A basic integration test that starts the server in a daemon thread 
+    and tries to connect with a socket client. 
     """
 
     def setUp(self):
+        """
+        Spins up the server in a background thread before each test. 
+        Waits briefly to ensure the server is listening.
+        """
         self.server_thread = threading.Thread(target=start_server, daemon=True)
         self.server_thread.start()
         time.sleep(1)
 
     def tearDown(self):
-        # In a real scenario, you'd gracefully shut down the server
+        """
+        Could send a shutdown signal or rely on the daemon thread ending with the process.
+        """
         pass
 
     def test_integration_server_basic(self):
         """
-        Connect to the server, send "1" (register), read response.
-        Our server expects next input for username. We'll just verify 
-        that we see "Enter a username" in the response.
+        Connects to the server on port 65432 and sends '1' to simulate 
+        the user selecting 'register'. Expects some prompt about username.
         """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect(("0.0.0.0", 65432))
