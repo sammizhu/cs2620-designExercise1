@@ -21,11 +21,14 @@ class ChatClient:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Chat Client")
-        self.socket = None  # Will hold our socket after login/registration
+        self.socket = None
         self.receive_queue = queue.Queue()
-        self.running = False  # For the chat message receiving thread
+        self.running = False
 
-        # Create the different pages as Frames
+        # We'll keep track of the last prompt we received from server
+        self.last_prompt = ""
+
+        # Create UI pages
         self.welcome_frame = tk.Frame(self.root)
         self.login_frame = tk.Frame(self.root)
         self.register_frame = tk.Frame(self.root)
@@ -90,40 +93,42 @@ class ChatClient:
         if not username or not password:
             self.login_error_label.config(text="Please enter both username and password.")
             return
-        self.login_error_label.config(text="") # Clear any previous error
-        # Start a separate thread for the login conversation
+        self.login_error_label.config(text="")
         threading.Thread(target=self.login_thread, args=(username, password), daemon=True).start()
 
     def login_thread(self, username, password):
         try:
-            # Create a new connection for this login attempt.
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
+
+            # Tell server "2" => login
             json_login_command = {"command": "2"}
-            # Tell the server you want to login by sending "2"
             self.socket.sendall(json.dumps(json_login_command).encode('utf-8'))
-            # Wait for prompt asking for username.
+
+            # Wait for "enter username" prompt
             _ = self.socket.recv(1024).decode('utf-8')
-            json_login_username = {"command": "2",
-                                   "username": username}
+
+            json_login_username = {"command": "2", "username": username}
             self.socket.sendall(json.dumps(json_login_username).encode('utf-8'))
-            # Wait for the prompt for password.
+
+            # Wait for password prompt
             _ = self.socket.recv(1024).decode('utf-8')
-            json_login_password = {"command": "2",
-                                   "password": password}
+
+            json_login_password = {"command": "2", "password": password}
             self.socket.sendall(json.dumps(json_login_password).encode('utf-8'))
-            # Wait for the final response.
+
+            # Final response
             result_jsonstr = self.socket.recv(1024).decode('utf-8')
             result = json.loads(result_jsonstr)["server_message"]
+
             if "Welcome" in result:
-                # Successful login; switch to chat page.
                 self.root.after(0, self.show_chat_page)
                 self.receive_queue.put(result)
             else:
-                # Login failed; show the error message.
                 self.root.after(0, lambda: self.login_error_label.config(text=result))
                 self.socket.close()
                 self.socket = None
+
         except Exception as e:
             err = "Login error: " + str(e)
             self.root.after(0, lambda: self.login_error_label.config(text=err))
@@ -170,29 +175,34 @@ class ChatClient:
         if password != confirm:
             self.register_error_label.config(text="Passwords do not match.")
             return
-        self.register_error_label.config(text="")  # Clear any previous error
-        # Start a separate thread for the registration conversation.
+        self.register_error_label.config(text="")
         threading.Thread(target=self.register_thread, args=(username, password, confirm), daemon=True).start()
 
     def register_thread(self, username, password, confirm):
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-            # Send "1" to choose registration.
+
+            # Tell server "1" => register
             json_register_command = {"command": "1"}
             self.socket.sendall(json.dumps(json_register_command).encode('utf-8'))
+
+            # Wait for "Enter a username" prompt
             _ = self.socket.recv(1024).decode('utf-8')
-            json_register_username = {"command": "1",
-                                      "username": username}
+            json_register_username = {"command": "1", "username": username}
             self.socket.sendall(json.dumps(json_register_username).encode('utf-8'))
+
+            # Wait for password prompt
             _ = self.socket.recv(1024).decode('utf-8')
-            json_register_password = {"command": "1",
-                                      "password": password}
+            json_register_password = {"command": "1", "password": password}
             self.socket.sendall(json.dumps(json_register_password).encode('utf-8'))
+
+            # Wait for confirm prompt
             _ = self.socket.recv(1024).decode('utf-8')
-            json_register_confirm = {"command": "1",
-                                     "password": confirm}
+            json_register_confirm = {"command": "1", "password": confirm}
             self.socket.sendall(json.dumps(json_register_confirm).encode('utf-8'))
+
+            # Final response
             result_jsonstr = self.socket.recv(1024).decode('utf-8')
             result = json.loads(result_jsonstr)["server_message"]
             if "successful" in result:
@@ -202,6 +212,7 @@ class ChatClient:
                 self.root.after(0, lambda: self.register_error_label.config(text=result))
                 self.socket.close()
                 self.socket = None
+
         except Exception as e:
             err = "Registration error: " + str(e)
             self.root.after(0, lambda: self.register_error_label.config(text=err))
@@ -213,13 +224,12 @@ class ChatClient:
     #   CHAT PAGE
     # =========================
     def build_chat_frame(self):
-        # Create a scrolled text widget for displaying messages.
-        self.chat_display = scrolledtext.ScrolledText(self.chat_frame, state='disabled', wrap='word', width=80, height=24)
+        self.chat_display = scrolledtext.ScrolledText(
+            self.chat_frame, state='disabled', wrap='word', width=80, height=24
+        )
         self.chat_display.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
-        # Define a tag for right-aligned (sent-by-me) messages.
         self.chat_display.tag_configure("right", justify="right")
 
-        # Create an input frame for composing messages.
         self.input_frame = tk.Frame(self.chat_frame)
         self.input_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
         self.message_entry = tk.Entry(self.input_frame, width=70)
@@ -237,29 +247,49 @@ class ChatClient:
 
     def send_message(self, event=None):
         message = self.message_entry.get().strip()
-        # Special case: the server expects "choice" when user is typing "1" or "2"
-        if message in ("1", "2"):
-            json_message = {"choice": message}
-        else:
-            json_message = {"command": message}
+        if not message:
+            return
 
-        if message:
-            # Display the message as sent-by-me (right aligned)
+        # Handle local "logoff"
+        if message.lower() == "logoff":
+            json_message = {"command": "logoff"}
             self.append_message(message, sent_by_me=True)
             try:
                 self.socket.sendall(json.dumps(json_message).encode('utf-8'))
-                if message.lower() == "logoff":
-                    # When "logoff" is typed, stop receiving, close the connection,
-                    # and go back to the welcome page.
-                    self.running = False
-                    self.socket.close()
-                    self.socket = None
-                    self.chat_frame.pack_forget()
-                    self.show_welcome_page()
-                    return
-            except Exception as e:
-                self.append_message("Error sending message: " + str(e), sent_by_me=True)
-            self.message_entry.delete(0, tk.END)
+            except:
+                pass
+            self.running = False
+            if self.socket:
+                self.socket.close()
+                self.socket = None
+            self.chat_frame.pack_forget()
+            self.show_welcome_page()
+            return
+
+        # Decide which JSON key to send based on the last prompt from server
+        if self.last_prompt and "Type '1' to read them, or '2' to skip" in self.last_prompt:
+            json_message = {"choice": message}
+        elif self.last_prompt and "Which sender do you want to read from?" in self.last_prompt:
+            json_message = {"sender": message}
+        elif self.last_prompt and (
+             "Are you sure you want to delete" in self.last_prompt
+             or "Are you sure you want to deactivate" in self.last_prompt
+        ):
+            json_message = {"data": message}
+        else:
+            # Normal usage: "command"
+            json_message = {"command": message}
+
+        # Display on our UI
+        self.append_message(message, sent_by_me=True)
+
+        # Send to server
+        try:
+            self.socket.sendall(json.dumps(json_message).encode('utf-8'))
+        except Exception as e:
+            self.append_message("Error sending message: " + str(e), sent_by_me=True)
+
+        self.message_entry.delete(0, tk.END)
 
     def append_message(self, message, sent_by_me=False):
         self.chat_display.configure(state='normal')
@@ -276,28 +306,50 @@ class ChatClient:
         self.root.after(100, self.poll_receive_queue)
 
     def receive_messages(self):
+        """
+        Modified to handle multiple JSON objects in one chunk,
+        preventing 'Extra data' parse errors.
+        """
+        partial_buffer = ""
+        decoder = json.JSONDecoder()
+
         while self.running:
             try:
-                data_jsonstr = self.socket.recv(1024).decode('utf-8')
-                if not data_jsonstr:
+                chunk = self.socket.recv(4096)  # read a larger chunk
+                if not chunk:
                     self.receive_queue.put("Server closed connection.")
                     break
 
-                # PARSE FIX: Instead of looking for ["data"], check for "server_message" or "messagetext"
-                data_dict = json.loads(data_jsonstr)
-                if "server_message" in data_dict:
-                    parsed_msg = data_dict["server_message"]
-                elif "messagetext" in data_dict:
-                    parsed_msg = data_dict["messagetext"]
-                else:
-                    # Fallback to show the entire dictionary if we don't recognize keys
-                    parsed_msg = str(data_dict)
+                partial_buffer += chunk.decode('utf-8')
 
-                self.receive_queue.put(parsed_msg)
+                # Try to parse out as many JSON objects as we can
+                while True:
+                    partial_buffer = partial_buffer.strip()
+                    if not partial_buffer:
+                        break
+                    try:
+                        obj, idx = decoder.raw_decode(partial_buffer)
+                        # Move partial_buffer ahead by 'idx' characters
+                        partial_buffer = partial_buffer[idx:]
+                        # Now handle the parsed obj
+                        if "server_message" in obj:
+                            self.last_prompt = obj["server_message"]
+                            parsed_msg = obj["server_message"]
+                        elif "messagetext" in obj:
+                            parsed_msg = obj["messagetext"]
+                        else:
+                            parsed_msg = str(obj)
+
+                        self.receive_queue.put(parsed_msg)
+
+                    except json.JSONDecodeError:
+                        # Not enough data to decode another object yet
+                        break
 
             except Exception as e:
                 self.receive_queue.put("Receive error: " + str(e))
                 break
+
         self.running = False
 
     def poll_receive_queue(self):
@@ -307,18 +359,20 @@ class ChatClient:
                 self.append_message(msg, sent_by_me=False)
         except queue.Empty:
             pass
+
         if self.running:
             self.root.after(100, self.poll_receive_queue)
         else:
             self.append_message("Disconnected.", sent_by_me=False)
 
     def on_close(self):
-        json_logoff = {"command": "logoff"}
         try:
             if self.socket:
-                self.socket.sendall(json.dumps(json_logoff)).encode('utf-8')  # (Original code kept as is)
+                # Attempt a clean logoff
+                json_logoff = {"command": "logoff"}
+                self.socket.sendall(json.dumps(json_logoff).encode('utf-8'))
                 self.socket.close()
-        except Exception:
+        except:
             pass
         self.root.destroy()
 
