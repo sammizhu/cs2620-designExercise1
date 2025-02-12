@@ -336,7 +336,7 @@ def handle_client(conn, addr):
     try:
         while True:
             data_jsonstr = conn.recv(1024).decode('utf-8')
-            data = json.loads(data_jsonstr)["data"] ### FIX ###
+            data = json.loads(data_jsonstr)["command"] ### FIX ###
             if not data:
                 # client disconnected
                 print(f"Client {addr} disconnected.")
@@ -457,7 +457,7 @@ def handle_client(conn, addr):
                                     conn.sendall(json.dumps(json_handleclient_delete).encode('utf-8'))
 
                                     confirm_resp_jsonstr = conn.recv(1024).decode('utf-8')
-                                    confirm_resp = json.loads(confirm_resp_jsonstr)["response"].lower() ### FIX ###
+                                    confirm_resp = json.loads(confirm_resp_jsonstr)["data"].lower() ### FIX ###
 
                                     if confirm_resp == 'yes':
                                         cur.execute("DELETE FROM messages WHERE messageid=%s", (last_msg_id,))
@@ -486,7 +486,7 @@ def handle_client(conn, addr):
                     conn.sendall(json.dumps(json_handleclient_deactivateconfirm).encode('utf-8'))
 
                     confirm_resp_jsonstr = conn.recv(1024).decode('utf-8')
-                    confirm_resp = json.loads(confirm_resp_jsonstr)["response"].lower() ### FIX ###
+                    confirm_resp = json.loads(confirm_resp_jsonstr)["data"].lower() ### FIX ###
 
                     if confirm_resp == 'yes':
                         try:

@@ -99,9 +99,6 @@ class ChatClient:
             # Create a new connection for this login attempt.
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-
-            # Read the initial welcome message from the server.
-            _ = self.socket.recv(1024).decode('utf-8')
             json_login_command = {"command": "2"}
             # Tell the server you want to login by sending "2"
             self.socket.sendall(json.dumps(json_login_command).encode('utf-8'))
@@ -181,7 +178,6 @@ class ChatClient:
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((HOST, PORT))
-            _ = self.socket.recv(1024).decode('utf-8')
             # Send "1" to choose registration.
             json_register_command = {"command": "1"}
             self.socket.sendall(json.dumps(json_register_command).encode('utf-8'))
