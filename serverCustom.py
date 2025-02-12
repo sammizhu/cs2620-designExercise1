@@ -3,7 +3,6 @@ import threading
 import pymysql
 import pymysql.cursors
 import bcrypt
-import traceback
 import argparse
 import os
 
@@ -17,6 +16,7 @@ HOST = args.host  # Use argument or environment variable
 PORT = args.port  # Use argument or environment variable
 
 clients = {}  
+
 
 def connectsql():
     """Establishes and returns a connection to the MySQL database."""
@@ -38,6 +38,8 @@ def checkRealUsername(username):
         with db.cursor() as cur:
             cur.execute("SELECT COUNT(*) AS cnt FROM users WHERE username=%s", (username,))
             row = cur.fetchone()
+            if row is None:
+                return False
             return (row['cnt'] > 0)
 
 def checkValidPassword(password):
@@ -150,7 +152,6 @@ def handle_registration(conn, user_id):
         conn.sendall("Registration successful. You are now logged in!\n".encode())
         return reg_username
     except Exception:
-        traceback.print_exc()
         conn.sendall("Server error. Registration canceled.\n".encode())
         return None
 
@@ -383,7 +384,6 @@ def handle_client(conn, addr):
                                     conn.sendall("Username does not exist.\n".encode())
 
                     except Exception:
-                        traceback.print_exc()
                         conn.sendall("Error storing/sending message.\n".encode())
                 
                 elif data.lower() == "search":
@@ -399,7 +399,6 @@ def handle_client(conn, addr):
                         else:
                             conn.sendall("No users found.\n".encode())
                     except Exception as e:
-                        traceback.print_exc()
                         conn.sendall("Error while searching for users.\n".encode())
                 
                 elif data.lower() == "delete":
@@ -423,7 +422,6 @@ def handle_client(conn, addr):
                                 else:
                                     conn.sendall("You have not sent any messages able to be deleted. Note that you cannot delete messages already read.\n".encode())
                     except Exception as e:
-                        traceback.print_exc()
                         conn.sendall("Error deleting your last message. Please try again.\n".encode())
 
                 elif data.lower() == "deactivate":
@@ -445,7 +443,6 @@ def handle_client(conn, addr):
                                     db.commit()
                             conn.sendall("Your account and all your sent messages have been removed. Goodbye.\n".encode())
                         except Exception as e:
-                            traceback.print_exc()
                             conn.sendall("Error deactivating your account.\n".encode())
                         finally:
                             # Force a break so we exit the loop and close connection
@@ -459,7 +456,6 @@ def handle_client(conn, addr):
 
     except Exception as e:
         print("Exception in handle_client:", e)
-        traceback.print_exc()
     finally:
         # If user was logged in, mark them inactive
         if username:

@@ -12,6 +12,7 @@
   - [Using the Client](#using-the-client)
 - [Features](#features)
 - [Commands](#commands)
+- [Testing] (#testing)
 
 ## Introduction
 This is a simple chat application that consists of a **server** and a **client**. The server manages user authentication, messaging, and storing user messages. The client provides a graphical interface for users to communicate.
@@ -111,3 +112,16 @@ Howver, if you run a JSON server, you must run a JSON client, vice versa.
 | `search` | Lists all registered users. |
 | `delete` | Deletes the last sent message. |
 | `deactivate` | Permanently deletes your account. |
+
+## Testing
+Server:
+```
+coverage run --source=serverCustom testServer.py
+coverage report -m
+```
+
+Client
+```
+coverage run --source=clientCustom testClient.py
+coverage report -m
+```
