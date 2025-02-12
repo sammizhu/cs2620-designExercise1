@@ -364,22 +364,22 @@ def handle_client(conn, addr):
                     try:
                         with connectsql() as db:
                             with db.cursor() as cur:
-                                cur.execute("INSERT INTO messages (receiver, sender, message, isread) VALUES (%s, %s, %s, 0)", (target_username, username, message))
-                                db.commit()
-
                                 # If target online, send message --> otherwise just keep it stored in messages table above
                                 cur.execute("SELECT socket_id, active FROM users WHERE username=%s", (target_username,))
                                 row = cur.fetchone()
-                                if row and row['socket_id'] and row['socket_id'].isdigit() and row['active']:
-                                    tsid = int(row['socket_id'])
-                                    if tsid in clients:
-                                        cur.execute("SELECT messageid FROM messages WHERE message=%s", (message))
-                                        msg_id = cur.fetchall()
-                                        msg_ids = tuple([m['messageid'] for m in msg_id])
-                                        query = "UPDATE messages SET isread=1 WHERE messageid=%s"
-                                        cur.execute(query, (msg_ids[0],))
-                                        db.commit()
-                                        clients[tsid].sendall(f"{username}: {message}\n".encode())
+                                if row:
+                                    cur.execute("INSERT INTO messages (receiver, sender, message, isread) VALUES (%s, %s, %s, 0)", (target_username, username, message))
+                                    db.commit()
+                                    if row['active'] and row['socket_id'] and row['socket_id'].isdigit():
+                                        tsid = int(row['socket_id'])
+                                        if tsid in clients:
+                                            cur.execute("SELECT messageid FROM messages WHERE message=%s", (message))
+                                            msg_id = cur.fetchall()
+                                            msg_ids = tuple([m['messageid'] for m in msg_id])
+                                            query = "UPDATE messages SET isread=1 WHERE messageid=%s"
+                                            cur.execute(query, (msg_ids[0],))
+                                            db.commit()
+                                            clients[tsid].sendall(f"{username}: {message}\n".encode())
                                 else:
                                     conn.sendall("Username does not exist.\n".encode())
 
