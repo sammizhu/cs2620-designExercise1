@@ -1,6 +1,6 @@
 """
 Usage:
-  coverage run --source=serverCustom testServer.py
+  coverage run --source=serverCustom testServerCustom.py
   coverage report -m
 """
 
@@ -12,6 +12,22 @@ from unittest.mock import patch, MagicMock
 import pymysql
 import pymysql.cursors
 import datetime
+
+# NEW MONKEY-PATCH CODE FOR PAYLOAD LOGGING 
+payload_log = []
+_original_sendall = socket.socket.sendall
+
+def logging_sendall(self, data, *args, **kwargs):
+    size = len(data)
+    payload_log.append(size)
+    # print(f"[LOG] Sending {size} bytes")
+    return _original_sendall(self, data, *args, **kwargs)
+
+def enable_payload_logging():
+    socket.socket.sendall = logging_sendall
+
+def disable_payload_logging():
+    socket.socket.sendall = _original_sendall
 
 from serverCustom import (
     connectsql,
@@ -229,13 +245,6 @@ class TestServerHighLevelFunctions(unittest.TestCase):
             any(b"Server error. Registration canceled." in msg for msg in msgs)
         )
 
-    @unittest.skip("Integration test would require a real server & DB.")
-    def test_handle_registration_integration(self):
-        """
-        Integration test: Would verify registration logic end-to-end against a real database.
-        """
-        pass
-
     @patch('serverCustom.connectsql')
     def test_handle_login_unit(self, mock_connectsql):
         """
@@ -287,13 +296,6 @@ class TestServerHighLevelFunctions(unittest.TestCase):
         self.assertIsNone(result)
         sendall_calls = mock_conn.sendall.call_args_list
         self.assertTrue(any(b"Login canceled." in call[0][0] for call in sendall_calls))
-
-    @unittest.skip("Integration test would require a live server & DB.")
-    def test_handle_login_integration(self):
-        """
-        Integration test: Would check handle_login() logic end-to-end against a real DB and client.
-        """
-        pass
 
     @patch('serverCustom.connectsql')
     def test_check_messages_server_side_unit_zero_unread(self, mock_connectsql):
@@ -762,35 +764,23 @@ class TestHandleClient(unittest.TestCase):
         raw_msgs = [call[0][0] for call in mock_conn.sendall.call_args_list]
         self.assertTrue(any(b"Your account and all your sent messages have been removed." in m for m in raw_msgs))
 
-    @unittest.skip("Integration test might create real socket client to test handle_client.")
-    def test_handle_client_integration(self):
-        """
-        Integration test: Would require an actual client connecting to the real server, 
-        sending commands, and verifying responses end-to-end.
-        """
-        pass
-
 
 class TestServerSocketIntegration(unittest.TestCase):
     """
-    A basic integration test that starts the server in a daemon thread 
-    and tries to connect with a socket client. 
+    A basic integration test that starts the server in a daemon thread
+    and tries to connect with a socket client.
     """
-
-    def setUp(self):
-        """
-        Spins up the server in a background thread before each test. 
-        Waits briefly to ensure the server is listening.
-        """
-        self.server_thread = threading.Thread(target=start_server, daemon=True)
-        self.server_thread.start()
+    @classmethod
+    def setUpClass(cls):
+        enable_payload_logging()
+        payload_log.clear()
+        cls.server_thread = threading.Thread(target=start_server, daemon=True)
+        cls.server_thread.start()
         time.sleep(1)
 
-    def tearDown(self):
-        """
-        Could send a shutdown signal or rely on the daemon thread ending with the process.
-        """
-        pass
+    @classmethod
+    def tearDownClass(cls):
+        disable_payload_logging()
 
     def test_integration_server_basic(self):
         """
@@ -802,6 +792,75 @@ class TestServerSocketIntegration(unittest.TestCase):
             s.sendall(b"1")
             resp = s.recv(1024).decode()
             self.assertIn("Enter a username", resp)
+
+    def test_full_chat_flow(self):
+        """
+        More realistic flow:
+          1. register
+          2. search
+          3. send chat message
+          4. delete it
+          5. check messages
+          6. log off
+        """
+        # Step 1: Register
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect(("0.0.0.0", 65432))
+            # Choose register
+            s.sendall(b"1")
+
+            # "Enter a username"
+            resp = s.recv(1024)
+            s.sendall(b"myuser")
+            resp = s.recv(1024)  # "Enter a password"
+            s.sendall(b"MyPass1!")
+            resp = s.recv(1024)  # "Confirm your password"
+            s.sendall(b"MyPass1!")
+            # "Registration successful"
+            resp = s.recv(1024)
+
+        # Step 2: Search (must login first, so let's open a new socket and login)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s2:
+            s2.connect(("0.0.0.0", 65432))
+            # Choose login
+            s2.sendall(b"2")
+
+            # "Enter your username"
+            resp = s2.recv(1024)
+            s2.sendall(b"myuser")
+
+            # "Enter your password"
+            resp = s2.recv(1024)
+            s2.sendall(b"MyPass1!")
+
+            # "Welcome, myuser!"
+            resp = s2.recv(1024)
+
+            # Now search
+            s2.sendall(b"search")
+            resp = s2.recv(1024)
+            # This should contain a list of users
+
+            # -- Step 3: Send a chat message
+            s2.sendall(b"@myuser Hello to myself!")
+            resp = s2.recv(1024)
+
+            # -- Step 4: Delete the last message
+            s2.sendall(b"delete")
+            resp = s2.recv(1024)
+            # The server should prompt "Are you sure"
+            s2.sendall(b"yes")
+            resp = s2.recv(1024)
+
+            # -- Step 5: Check messages
+            s2.sendall(b"check")
+            resp = s2.recv(1024)
+
+            # -- Step 6: Log off
+            s2.sendall(b"logoff")
+            resp = s2.recv(1024)
+
+        print("CUSTOM FULL FLOW =>", payload_log)
 
 
 if __name__ == "__main__":

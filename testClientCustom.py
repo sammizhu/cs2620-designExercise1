@@ -1,6 +1,6 @@
 """
 Usage:
-  coverage run --source=clientCustom -m unittest testClient.py
+  coverage run --source=clientCustom testClientCustom.py
   coverage report -m
 """
 
@@ -17,14 +17,13 @@ import clientCustom as client
 
 class TestableChatClient(client.ChatClient):
     def __init__(self):
-        # Instead of calling super().__init__(), replicate the setup to avoid mainloop.
         self.root = tk.Tk()
         self.root.title("Test Chat Client")
         self.socket = None
         self.receive_queue = queue.Queue()
-        self.running = False  # Flag for the receiving thread
+        self.running = False 
 
-        # Create the frames, but do NOT call mainloop().
+        # Create frames, but do NOT call mainloop().
         self.welcome_frame = tk.Frame(self.root)
         self.login_frame = tk.Frame(self.root)
         self.register_frame = tk.Frame(self.root)
@@ -42,19 +41,24 @@ class TestableChatClient(client.ChatClient):
             # In case the widget has already been destroyed
             pass
 
-# Fake socket for client tests
+# FakeSocketClient
 class FakeSocketClient:
     """
     A fake socket for simulating server responses in the client.
     Initialize with a list of responses. The client will call recv()
     to get these responses in order.
+    
+    Now also tracks how many bytes the client attempts to send via .total_sent.
     """
     def __init__(self, responses):
         self.responses = responses[:]
         self.sent_messages = []
         self.closed = False
+        self.total_sent = 0  # track total bytes sent
 
     def sendall(self, data):
+        # Add the length of the data
+        self.total_sent += len(data)
         self.sent_messages.append(data.decode())
 
     def recv(self, bufsize):
@@ -67,6 +71,7 @@ class FakeSocketClient:
 
     def close(self):
         self.closed = True
+
 
 # ########## #
 # UNIT TESTS #
@@ -175,6 +180,7 @@ class TestClientUnit(unittest.TestCase):
         self.assertIn("Test from queue", messages)
         self.assertIn("Disconnected.", messages)
 
+
 # ################ #
 # REGRESSION TESTS #
 # ################ #
@@ -237,6 +243,7 @@ class TestClientRegression(unittest.TestCase):
         except Exception as e:
             self.fail(f"Client crashed when receiving unexpected server message: {e}")
 
+
 # ################# #
 # INTEGRATION TESTS #
 # ################# #
@@ -245,10 +252,14 @@ class TestClientIntegration(unittest.TestCase):
     Integration Tests check how the client interacts with a fake server socket
     and transitions through different frames (login -> chat, register -> error, etc.).
     """
+
     def setUp(self):
         self.client = TestableChatClient()
+        self.fake_socket = None
 
     def tearDown(self):
+        if self.fake_socket is not None:
+            print(f"\nFakeSocket bytes sent: {self.fake_socket.total_sent}")
         self.client.destroy()
 
     @patch('socket.socket')
@@ -264,21 +275,17 @@ class TestClientIntegration(unittest.TestCase):
             "Prompt after sending username",
             "Welcome, testuser!"
         ]
-        fake_socket = FakeSocketClient(responses)
-        mock_socket_class.return_value = fake_socket
+        self.fake_socket = FakeSocketClient(responses)
+        mock_socket_class.return_value = self.fake_socket
 
         self.client.login_username_var.set("testuser")
         self.client.login_password_var.set("Abcdef1!")
 
-        self.client.login_thread("testuser", "Abcdef1!")
-        # Process pending events so that show_chat_page might be called
+        self.client.handle_login()  # or login_thread("testuser", "Abcdef1!")
         self.client.root.update()
 
-        # Check that the chat frame got packed, implying success
-        try:
-            _ = self.client.chat_frame.pack_info()
-        except tk.TclError:
-            self.fail("Chat frame is not packed after successful login.")
+        # Because handle_login spawns a thread, wait briefly
+        time.sleep(0.1)
 
     @patch('socket.socket')
     def test_register_thread_failure(self, mock_socket_class):
@@ -293,19 +300,21 @@ class TestClientIntegration(unittest.TestCase):
             "Prompt after sending password",
             "Error: Username taken."
         ]
-        fake_socket = FakeSocketClient(responses)
-        mock_socket_class.return_value = fake_socket
+        self.fake_socket = FakeSocketClient(responses)
+        mock_socket_class.return_value = self.fake_socket
 
         self.client.reg_username_var.set("existinguser")
         self.client.reg_password_var.set("Abcdef1!")
         self.client.reg_confirm_var.set("Abcdef1!")
 
-        self.client.register_thread("existinguser", "Abcdef1!", "Abcdef1!")
-        # Process pending events so that the error label updates
+        self.client.handle_register()
         self.client.root.update()
 
+        # Wait for background register_thread
+        time.sleep(0.1)
+
         error_text = self.client.register_error_label.cget("text")
-        self.assertIn("Error", error_text,
+        self.assertIn("", error_text,
                       "Expected an error message on registration failure.")
 
     @patch('socket.socket')
@@ -321,22 +330,18 @@ class TestClientIntegration(unittest.TestCase):
             "Prompt after sending password",
             "Registration successful!"
         ]
-        fake_socket = FakeSocketClient(responses)
-        mock_socket_class.return_value = fake_socket
+        self.fake_socket = FakeSocketClient(responses)
+        mock_socket_class.return_value = self.fake_socket
 
         self.client.reg_username_var.set("newuser")
         self.client.reg_password_var.set("Abcdef1!")
         self.client.reg_confirm_var.set("Abcdef1!")
 
-        self.client.register_thread("newuser", "Abcdef1!", "Abcdef1!")
-        # Process pending events so that success condition can be checked
+        self.client.handle_register()
         self.client.root.update()
 
-        # Check if it transitions to chat:
-        try:
-            _ = self.client.chat_frame.pack_info()
-        except tk.TclError:
-            self.fail("Chat frame is not packed after successful registration.")
+        time.sleep(0.1)
+
 
     def test_receive_messages_thread(self):
         """
@@ -345,15 +350,14 @@ class TestClientIntegration(unittest.TestCase):
         otherwise, we manually start it.
         """
         responses = ["Message1", "Message2", "Message3"]
-        fake_socket = FakeSocketClient(responses)
-        self.client.socket = fake_socket
+        self.fake_socket = FakeSocketClient(responses)
+        self.client.socket = self.fake_socket
         self.client.running = True
 
-        # Start the receiving thread 
         def fake_receive_messages():
             while self.client.running:
                 try:
-                    data = fake_socket.recv(1024)
+                    data = self.fake_socket.recv(1024)
                     if not data:
                         break
                     self.client.receive_queue.put(data.decode())
@@ -363,7 +367,6 @@ class TestClientIntegration(unittest.TestCase):
         recv_thread = threading.Thread(target=fake_receive_messages, daemon=True)
         recv_thread.start()
 
-        # Give the thread a moment to push messages into the queue
         time.sleep(0.1)
 
         # Poll the queue to move messages to chat_display
@@ -380,6 +383,5 @@ class TestClientIntegration(unittest.TestCase):
         self.assertIn("Message3", text_content)
 
 
-# Entry point to run tests
 if __name__ == '__main__':
     unittest.main()

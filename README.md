@@ -114,14 +114,32 @@ Howver, if you run a JSON server, you must run a JSON client, vice versa.
 | `deactivate` | Permanently deletes your account. |
 
 ## Testing
-Server:
+### Server
+ServerCustom:
 ```
-coverage run --source=serverCustom testServer.py
+coverage run --source=serverCustom testServerCustom.py
 coverage report -m
 ```
+![alt text](img/serverCustom.png)
 
-Client
+ServerJSON:
 ```
-coverage run --source=clientCustom testClient.py
+coverage run --source=serverCustom testServerJSON.py
 coverage report -m
 ```
+![alt text](img/serverJSON.png)
+
+### Client
+ClientCustom:
+```
+coverage run --source=clientCustom testClientCustom.py
+coverage report -m
+```
+![alt text](img/clientCustom.png)
+
+ClientJSON:
+```
+coverage run --source=clientJson testClientJSON.py
+coverage report -m
+```
+![alt text](img/clientJSON.png)
